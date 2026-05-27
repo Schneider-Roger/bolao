@@ -50,3 +50,4 @@ backend/uploads/
 ~$*.xlsx
 *.db
 *.sqlite
+*.zip
