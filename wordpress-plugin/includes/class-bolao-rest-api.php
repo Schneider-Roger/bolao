@@ -305,14 +305,19 @@ class Bolao_REST_API {
             'role' => $colaborador->role
         ), $secret);
 
-        // Set HttpOnly cookie
-        setcookie("token", $token, array(
-            'expires' => time() + (3600 * 24 * 7),
-            'path' => '/',
-            'httponly' => true,
-            'samesite' => 'Lax',
-            'secure' => is_ssl()
-        ));
+        // Set HttpOnly cookie com fallback seguro para PHP < 7.3
+        if (PHP_VERSION_ID >= 70300) {
+            setcookie("token", $token, array(
+                'expires' => time() + (3600 * 24 * 7),
+                'path' => '/',
+                'httponly' => true,
+                'samesite' => 'Lax',
+                'secure' => is_ssl()
+            ));
+        } else {
+            // HACK elegante para injetar SameSite no header do cookie antes do PHP 7.3
+            setcookie("token", $token, time() + (3600 * 24 * 7), "/; SameSite=Lax", "", is_ssl(), true);
+        }
 
         $isPrimeiroAcesso = empty($colaborador->apelido) || empty($colaborador->selecao_favorita);
 

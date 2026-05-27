@@ -35,7 +35,7 @@ class Bolao_Crypto {
     public static function encrypt($text) {
         if ($text === null || $text === '') return null;
         
-        list($encryption_key, ) = self::get_keys();
+        list($encryption_key, $unused_hmac_key) = self::get_keys();
         if (strlen($encryption_key) !== 32) {
             error_log('Aviso (Bolão): BOLAO_ENCRYPTION_KEY não configurada ou tamanho inválido.');
             return $text; // Retorno em texto puro como fallback de contingência
@@ -56,7 +56,7 @@ class Bolao_Crypto {
             return $encryptedText;
         }
 
-        list($encryption_key, ) = self::get_keys();
+        list($encryption_key, $unused_hmac_key) = self::get_keys();
         if (strlen($encryption_key) !== 32) {
             return $encryptedText;
         }
