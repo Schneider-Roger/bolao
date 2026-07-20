@@ -34,14 +34,14 @@ function getResultado(a: number, b: number): 'V' | 'E' | 'D' {
 }
 
 // Normaliza fase para comparação
-function isFaseGrupoOu16avos(fase: string): boolean {
+function isFaseGrupo(fase: string): boolean {
   const f = fase.toLowerCase();
-  return f.includes('grupo') || f.includes('16') || f.includes('avos');
+  return f.includes('grupo');
 }
 
-function isMataMataSemEmpate(fase: string): boolean {
+function isMataMata(fase: string): boolean {
   const f = fase.toLowerCase();
-  return f.includes('oitava') || f.includes('quarta') || f.includes('semi') || f.includes('final') || f.includes('terceiro');
+  return f.includes('16') || f.includes('avos') || f.includes('oitava') || f.includes('quarta') || f.includes('semi') || f.includes('final') || f.includes('terceiro') || f.includes('3º') || f.includes('lugar');
 }
 
 // ============================================================
@@ -53,34 +53,136 @@ export function calcularPontosPalpite(jogo: Jogo, palpite: Palpite): {
   acertou_placar: boolean;
   acertou_confronto: boolean;
 } {
+  // Se for o jogo África do Sul x Canadá (ID 97) ou Espanha x Bélgica (ID 122), força 0 pontos para todos
+  if (Number(jogo.id) === 97 || Number(jogo.id) === 122) {
+    return {
+      pontos: 0,
+      acertou_resultado: false,
+      acertou_placar: false,
+      acertou_confronto: false
+    };
+  }
+
   const resultadoReal = getResultado(jogo.placar_a, jogo.placar_b);
   const resultadoPalpite = getResultado(palpite.palpite_a, palpite.palpite_b);
 
   const acertouResultado = resultadoReal === resultadoPalpite;
-  const acertouPlacar = palpite.palpite_a === jogo.placar_a && palpite.palpite_b === jogo.placar_b;
+  let acertouPlacar = palpite.palpite_a === jogo.placar_a && palpite.palpite_b === jogo.placar_b;
+
+  if (isMataMata(jogo.fase)) {
+    if (palpite.palpite_a !== null && palpite.palpite_b !== null && jogo.placar_a !== null && jogo.placar_b !== null && palpite.confronto_time_a && palpite.confronto_time_b && jogo.time_a && jogo.time_b) {
+      const pA = palpite.confronto_time_a.toLowerCase().trim();
+      const pB = palpite.confronto_time_b.toLowerCase().trim();
+      const rA = jogo.time_a.toLowerCase().trim();
+      const rB = jogo.time_b.toLowerCase().trim();
+
+      if (pA === rA && pB === rB) {
+        acertouPlacar = (palpite.palpite_a === jogo.placar_a && palpite.palpite_b === jogo.placar_b);
+      } else if (pA === rB && pB === rA) {
+        acertouPlacar = (palpite.palpite_a === jogo.placar_b && palpite.palpite_b === jogo.placar_a);
+      } else if (pA === rA) {
+        acertouPlacar = (palpite.palpite_a === jogo.placar_a && palpite.palpite_b === jogo.placar_b);
+      } else if (pA === rB) {
+        acertouPlacar = (palpite.palpite_a === jogo.placar_b && palpite.palpite_b === jogo.placar_a);
+      } else if (pB === rA) {
+        acertouPlacar = (palpite.palpite_b === jogo.placar_a && palpite.palpite_a === jogo.placar_b);
+      } else if (pB === rB) {
+        acertouPlacar = (palpite.palpite_b === jogo.placar_b && palpite.palpite_a === jogo.placar_a);
+      }
+    }
+  }
 
   // Para mata-mata com empate no tempo regulamentar: valida classificado
   const eEmpateReal = resultadoReal === 'E';
 
-  // Acerto de confronto (oitavas em diante)
+  // Acertos de confronto e classificado
   let acertouConfronto = false;
-  if (palpite.confronto_time_a && palpite.confronto_time_b && jogo.time_a && jogo.time_b) {
-    // Verifica se os dois times jogando coincidem com os dois times previstos (ignorando a ordem)
-    const confrontoReal = [jogo.time_a.toLowerCase().trim(), jogo.time_b.toLowerCase().trim()].sort();
-    const confrontoPrev = [palpite.confronto_time_a.toLowerCase().trim(), palpite.confronto_time_b.toLowerCase().trim()].sort();
-    acertouConfronto = (confrontoReal[0] === confrontoPrev[0]) && (confrontoReal[1] === confrontoPrev[1]);
-  }
+  let acertouClassificado = false;
 
-  // Acerto de classificado (mata-mata com empate)
-  const acertouClassificado =
-    !!palpite.time_classificado_palpite &&
-    !!jogo.classificado &&
-    palpite.time_classificado_palpite.toLowerCase().trim() === jogo.classificado.toLowerCase().trim();
+  if (isFaseGrupo(jogo.fase)) {
+    if (palpite.confronto_time_a && palpite.confronto_time_b && jogo.time_a && jogo.time_b) {
+      const confrontoReal = [jogo.time_a.toLowerCase().trim(), jogo.time_b.toLowerCase().trim()].sort();
+      const confrontoPrev = [palpite.confronto_time_a.toLowerCase().trim(), palpite.confronto_time_b.toLowerCase().trim()].sort();
+      acertouConfronto = (confrontoReal[0] === confrontoPrev[0]) && (confrontoReal[1] === confrontoPrev[1]);
+    }
+  } else if (isMataMata(jogo.fase)) {
+    // Para mata-mata: compara se os times do palpite do usuário são os mesmos do jogo real
+    if (palpite.confronto_time_a && palpite.confronto_time_b && jogo.time_a && jogo.time_b) {
+      const confrontoReal = [jogo.time_a.toLowerCase().trim(), jogo.time_b.toLowerCase().trim()].sort();
+      const confrontoPrev = [palpite.confronto_time_a.toLowerCase().trim(), palpite.confronto_time_b.toLowerCase().trim()].sort();
+      acertouConfronto = (confrontoReal[0] === confrontoPrev[0]) && (confrontoReal[1] === confrontoPrev[1]);
+    } else {
+      acertouConfronto = false;
+    }
+
+    // Determina o classificado real (vencedor oficial do jogo)
+    let classificadoReal = jogo.classificado;
+    if (!classificadoReal && jogo.placar_a !== null && jogo.placar_b !== null) {
+      const ja = Number(jogo.placar_a);
+      const jb = Number(jogo.placar_b);
+      if (ja > jb) {
+        classificadoReal = jogo.time_a;
+      } else if (jb > ja) {
+        classificadoReal = jogo.time_b;
+      }
+    }
+
+    // Determina o classificado previsto pelo participante (mapeado para o time real de acordo com as colunas)
+    if (palpite.palpite_a !== null && palpite.palpite_b !== null && jogo.time_a && jogo.time_b) {
+      const pa = Number(palpite.palpite_a);
+      const pb = Number(palpite.palpite_b);
+      let classificadoPalpiteSide: 'a' | 'b' | null = null;
+
+      if (pa > pb) {
+        classificadoPalpiteSide = 'a';
+      } else if (pb > pa) {
+        classificadoPalpiteSide = 'b';
+      } else {
+        // Empate no palpite: olha qual time foi configurado como classificado no palpite
+        const cp = palpite.time_classificado_palpite ? palpite.time_classificado_palpite.toLowerCase().trim() : '';
+        const prevA = palpite.confronto_time_a ? palpite.confronto_time_a.toLowerCase().trim() : '';
+        const prevB = palpite.confronto_time_b ? palpite.confronto_time_b.toLowerCase().trim() : '';
+
+        if (cp === prevA && prevA !== '') {
+          classificadoPalpiteSide = 'a';
+        } else if (cp === prevB && prevB !== '') {
+          classificadoPalpiteSide = 'b';
+        } else {
+          // Caso genérico ou backup
+          const realA = jogo.time_a.toLowerCase().trim();
+          const realB = jogo.time_b.toLowerCase().trim();
+          if (cp === realA) {
+            classificadoPalpiteSide = 'a';
+          } else if (cp === realB) {
+            classificadoPalpiteSide = 'b';
+          }
+        }
+      }
+
+      // Primeiro verifica se o nome do classificado do palpite coincide diretamente com o classificado real
+      const cpName = palpite.time_classificado_palpite ? palpite.time_classificado_palpite.toLowerCase().trim() : '';
+      const crName = classificadoReal ? classificadoReal.toLowerCase().trim() : '';
+
+      if (cpName && crName && cpName === crName) {
+        acertouClassificado = true;
+      } else {
+        // Se os nomes não coincidem diretamente, usamos a regra do lado do chaveamento
+        if (classificadoPalpiteSide && classificadoReal) {
+          const classificadoRealLower = classificadoReal.toLowerCase().trim();
+          const expectedRealClassificado = classificadoPalpiteSide === 'a' 
+            ? jogo.time_a.toLowerCase().trim() 
+            : jogo.time_b.toLowerCase().trim();
+          
+          acertouClassificado = (classificadoRealLower === expectedRealClassificado);
+        }
+      }
+    }
+  }
 
   let pontos = 0;
 
-  if (isFaseGrupoOu16avos(jogo.fase)) {
-    // ── Fase de grupos e 16avos ──
+  if (isFaseGrupo(jogo.fase)) {
+    // ── Fase de grupos ──
     // resultado + placar = 5 | apenas resultado = 2 | erro = 0
     if (acertouResultado) {
       if (acertouPlacar) {
@@ -89,31 +191,20 @@ export function calcularPontosPalpite(jogo: Jogo, palpite: Palpite): {
         pontos = 2;
       }
     }
-  } else if (isMataMataSemEmpate(jogo.fase)) {
-    if (eEmpateReal) {
-      // ── Mata-mata com empate: valida classificado ──
-      // classificado + placar = 5 | apenas classificado = 2 | erro = 0
-      if (acertouClassificado) {
-        if (acertouPlacar) {
-          pontos = 5;
-        } else {
-          pontos = 2;
-        }
-      }
-    } else {
-      // ── Oitavas em diante (sem empate): valida confronto ──
-      // resultado + confronto + placar = 5 | resultado + confronto = 2 | resultado sem confronto = 2 | erro = 0
-      if (acertouResultado) {
-        if (acertouConfronto && acertouPlacar) {
-          pontos = 5;
-        } else {
-          pontos = 2;
-        }
+  } else if (isMataMata(jogo.fase)) {
+    // ── Mata-mata: validação baseada no acerto do time que avança (classificado) ──
+    if (acertouClassificado) {
+      if (acertouConfronto && acertouPlacar) {
+        pontos = 5;
+      } else {
+        pontos = 2;
       }
     }
   }
 
-  return { pontos, acertou_resultado: acertouResultado, acertou_placar: acertouPlacar, acertou_confronto: acertouConfronto };
+  const finalAcertouResultado = isMataMata(jogo.fase) ? acertouClassificado : acertouResultado;
+
+  return { pontos, acertou_resultado: finalAcertouResultado, acertou_placar: acertouPlacar, acertou_confronto: acertouConfronto };
 }
 
 // ============================================================
@@ -282,6 +373,65 @@ export async function pontuarJogo(jogoId: number): Promise<void> {
       "UPDATE jogos SET status = 'pontuado' WHERE id = ?",
       [jogoId]
     );
+
+    // Propaga classificado/vencedor real para a fase seguinte no banco
+    if (isMataMata(jogo.fase)) {
+      let classificadoReal = jogo.classificado;
+      if (!classificadoReal && jogo.placar_a !== null && jogo.placar_b !== null) {
+        const ja = Number(jogo.placar_a);
+        const jb = Number(jogo.placar_b);
+        if (ja > jb) {
+          classificadoReal = jogo.time_a;
+        } else if (jb > ja) {
+          classificadoReal = jogo.time_b;
+        }
+      }
+
+      if (classificadoReal) {
+        const oitavas: Record<number, { proximoId: number; lado: 'a' | 'b' }> = {
+          113: { proximoId: 121, lado: 'a' }, 114: { proximoId: 121, lado: 'b' },
+          115: { proximoId: 122, lado: 'a' }, 116: { proximoId: 122, lado: 'b' },
+          117: { proximoId: 123, lado: 'a' }, 118: { proximoId: 123, lado: 'b' },
+          119: { proximoId: 124, lado: 'b' }, 120: { proximoId: 124, lado: 'a' }
+        };
+
+        const quartas: Record<number, { proximoId: number; lado: 'a' | 'b' }> = {
+          121: { proximoId: 125, lado: 'a' }, 122: { proximoId: 125, lado: 'b' },
+          123: { proximoId: 126, lado: 'a' }, 124: { proximoId: 126, lado: 'b' }
+        };
+
+        if (oitavas[jogoId]) {
+          const { proximoId, lado } = oitavas[jogoId];
+          await conn.query(
+            `UPDATE jogos SET time_${lado} = ? WHERE id = ?`,
+            [classificadoReal, proximoId]
+          );
+        } else if (quartas[jogoId]) {
+          const { proximoId, lado } = quartas[jogoId];
+          await conn.query(
+            `UPDATE jogos SET time_${lado} = ? WHERE id = ?`,
+            [classificadoReal, proximoId]
+          );
+        } else if (jogoId === 125 || jogoId === 126) {
+          const lado = jogoId === 125 ? 'a' : 'b';
+          // Vencedor vai para a Final (128)
+          await conn.query(
+            `UPDATE jogos SET time_${lado} = ? WHERE id = 128`,
+            [classificadoReal]
+          );
+          // Perdedor vai para a Disputa de 3º Lugar (127)
+          const perdedorReal = classificadoReal.toLowerCase().trim() === jogo.time_a.toLowerCase().trim()
+            ? jogo.time_b
+            : jogo.time_a;
+          if (perdedorReal) {
+            await conn.query(
+              `UPDATE jogos SET time_${lado} = ? WHERE id = 127`,
+              [perdedorReal]
+            );
+          }
+        }
+      }
+    }
 
     await conn.commit();
     conn.release();

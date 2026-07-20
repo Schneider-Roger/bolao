@@ -1,8 +1,11 @@
 import pool from './src/config/db';
 
-async function checkGames() {
-    const [rows] = await pool.query('SELECT * FROM jogos WHERE rodada = 1 ORDER BY data_hora');
-    console.table(rows);
+async function checkBracket() {
+    const [jogosGrupos] = await pool.query(`
+      SELECT id FROM jogos WHERE fase LIKE 'Grupo %' AND status NOT IN ('encerrado', 'pontuado')
+    `);
+    console.log("Count of incomplete group games:", (jogosGrupos as any[]).length);
+    console.log("Is it liberado?", (jogosGrupos as any[]).length === 0);
     process.exit(0);
 }
-checkGames();
+checkBracket();

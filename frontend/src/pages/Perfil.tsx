@@ -39,8 +39,8 @@ function Perfil() {
     const [foto, setFoto] = useState<File | null>(null);
     const [apelido, setApelido] = useState(user?.apelido || user?.nome || "");
     const [selecao, setSelecao] = useState(user?.selecao_favorita || "");
-    const [emailCorporativo, setEmailCorporativo] = useState(user?.email_corporativo || "");
     const [departamento, setDepartamento] = useState(user?.setor || "");
+    const [removerFoto, setRemoverFoto] = useState(false);
 
     // Iniciais do nome
     const iniciais = user?.nome
@@ -79,9 +79,8 @@ function Perfil() {
             setPrimeiroAcessoCompleto({
                 apelido: data.colaborador.apelido,
                 selecao_favorita: data.colaborador.selecao_favorita,
-                foto_perfil: data.colaborador.foto_perfil || user?.foto_perfil,
-                setor: data.colaborador.setor,
-                email_corporativo: data.colaborador.email_corporativo
+                foto_perfil: data.colaborador.foto_perfil,
+                setor: data.colaborador.setor
             });
 
             // Força a atualização dos dados se o usuário possuir queries guardadas
@@ -90,6 +89,7 @@ function Perfil() {
             alert("Perfil atualizado com sucesso!");
             setIsEditing(false);
             setFoto(null); // Reseta a foto para o estado inicial
+            setRemoverFoto(false);
         },
         onError: (error: any) => {
             const message = error.response?.data?.error || "Erro ao atualizar perfil";
@@ -109,8 +109,8 @@ function Perfil() {
         if (foto) formData.append("foto", foto);
         formData.append("apelido", apelido);
         formData.append("selecao_favorita", selecao);
-        if (emailCorporativo) formData.append('email_corporativo', emailCorporativo);
         if (departamento) formData.append('setor', departamento);
+        formData.append('remover_foto', String(removerFoto));
 
         editProfileMutation.mutate(formData);
     };
@@ -118,9 +118,9 @@ function Perfil() {
     const openEditModal = () => {
         setApelido(user?.apelido || user?.nome || "");
         setSelecao(user?.selecao_favorita || "");
-        setEmailCorporativo(user?.email_corporativo || "");
         setDepartamento(user?.setor || "");
         setFoto(null);
+        setRemoverFoto(false);
         setIsEditing(true);
     };
 
@@ -128,7 +128,7 @@ function Perfil() {
     const acertosExatos = minha?.placares_exatos || 0;
     const acertosResultado = minha?.acertos_resultado || 0;
     const erros = minha?.erros || 0;
-    const aproveitamento = totalPalpites > 0 ? Math.round(((acertosExatos + acertosResultado) / totalPalpites) * 100) : 0;
+    const aproveitamento = totalPalpites > 0 ? Math.round((acertosResultado / totalPalpites) * 100) : 0;
 
     return (
         <div className="w-full space-y-6 px-4 md:px-[100px] text-white pb-24 relative break-words">
@@ -294,7 +294,7 @@ function Perfil() {
                                         <label className="block w-24 h-24 rounded-full bg-[#1e293b] border-2 border-[#008237] overflow-hidden relative shadow-md cursor-pointer">
                                             {foto ? (
                                                 <img src={URL.createObjectURL(foto)} alt="Preview" className="w-full h-full object-cover" />
-                                            ) : (user?.foto_perfil && user.foto_perfil !== "null" && typeof user.foto_perfil === "string" && user.foto_perfil.trim() !== "") ? (
+                                            ) : (user?.foto_perfil && user.foto_perfil !== "null" && typeof user.foto_perfil === "string" && user.foto_perfil.trim() !== "" && !removerFoto) ? (
                                                 <img src={user.foto_perfil.startsWith('/uploads') ? `${BASE_URL}${user.foto_perfil}` : `${BASE_URL}/uploads/${user.foto_perfil}`} alt="Atual" className="w-full h-full object-cover transition-opacity group-hover:opacity-40" />
                                             ) : (
                                                 <img src="/default-avatar.png" alt="Padrão" className="w-full h-full object-cover transition-opacity group-hover:opacity-40" />
@@ -302,10 +302,31 @@ function Perfil() {
                                             <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/50">
                                                 <span className="material-symbols-outlined text-white text-xl">photo_camera</span>
                                             </div>
-                                            <input type="file" accept="image/jpeg, image/png" className="hidden" onChange={(e) => setFoto(e.target.files?.[0] || null)} />
+                                            <input 
+                                                type="file" 
+                                                accept="image/jpeg, image/png" 
+                                                className="hidden" 
+                                                onChange={(e) => {
+                                                    const file = e.target.files?.[0] || null;
+                                                    setFoto(file);
+                                                    if (file) setRemoverFoto(false);
+                                                }} 
+                                            />
                                         </label>
                                     </div>
                                     <p className="mt-2 text-[10px] uppercase tracking-wider text-gray-400 font-bold">Trocar foto</p>
+                                    {((user?.foto_perfil && !removerFoto) || foto) && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setFoto(null);
+                                                setRemoverFoto(true);
+                                            }}
+                                            className="mt-1 text-[8px] uppercase tracking-wider text-red-400 hover:text-red-300 font-bold transition-colors cursor-pointer"
+                                        >
+                                            Remover foto
+                                        </button>
+                                    )}
                                 </section>
 
                                 {/* Nome */}
@@ -320,17 +341,6 @@ function Perfil() {
                                     />
                                 </div>
 
-                                {/* E-mail */}
-                                <div className="flex flex-col gap-1.5">
-                                    <label className="text-[10px] font-bold uppercase tracking-wider text-gray-400">E-mail</label>
-                                    <input
-                                        className="bg-[#1e293b] border border-white/5 rounded-xl text-white text-sm py-3 px-4 w-full focus:ring-2 focus:ring-emerald-500 outline-none"
-                                        type="email"
-                                        value={emailCorporativo}
-                                        onChange={(e) => setEmailCorporativo(e.target.value)}
-                                        placeholder="seu.email@empresa.com"
-                                    />
-                                </div>
 
                                 {/* Departamento */}
                                 <div className="flex flex-col gap-1.5">

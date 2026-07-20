@@ -10,7 +10,7 @@ const selecoesParticipantes = [
     "Egito", "Equador", "Escócia", "Espanha", "Estados Unidos", "França", "Gana", 
     "Haiti", "Holanda", "Inglaterra", "Irã", "Iraque", "Japão", "Jordânia", 
     "Marrocos", "México", "Noruega", "Nova Zelândia", "Panamá", "Paraguai", 
-    "Portugal", "Qatar", "Senegal", "Suécia", "Suíça", "Tchéquia", "Tunísia", 
+    "Portugal", "Qatar", "Senegal", "Suécia", "Suíça", "República Tcheca", "Tunísia", 
     "Turquia", "Uruguai", "Uzbequistão"
 ].sort((a, b) => a.localeCompare(b));
 

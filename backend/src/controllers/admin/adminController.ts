@@ -53,8 +53,12 @@ export const recalcularRankingManual = async (req: Request, res: Response): Prom
 export const getColaboradores = async (req: Request, res: Response): Promise<any> => {
   try {
     const [rows] = await pool.query<RowDataPacket[]>(`
-      SELECT id, codigo_funcionario, nome, data_nascimento, setor, unidade, apelido, email_corporativo, foto_perfil, ativo, role
-      FROM colaboradores
+      SELECT c.id, c.codigo_funcionario, c.nome, c.data_nascimento, c.setor, c.unidade, 
+             c.apelido, c.foto_perfil, c.ativo, c.role, c.senha_alterada,
+             COALESCE(r.pontos_total, 0) AS pontos_total,
+             (SELECT COUNT(*) FROM palpites WHERE colaborador_id = c.id) AS total_palpites
+      FROM colaboradores c
+      LEFT JOIN ranking r ON r.colaborador_id = c.id
     `);
 
     const colaboradoresDescriptografados = rows.map(r => ({
@@ -64,8 +68,7 @@ export const getColaboradores = async (req: Request, res: Response): Promise<any
       data_nascimento: decryptField(r.data_nascimento),
       setor: decryptField(r.setor),
       unidade: decryptField(r.unidade),
-      apelido: decryptField(r.apelido),
-      email_corporativo: decryptField(r.email_corporativo)
+      apelido: decryptField(r.apelido)
     }));
 
     // Ordenar em memória pois os nomes estavam criptografados no banco
@@ -86,7 +89,7 @@ export const getColaboradores = async (req: Request, res: Response): Promise<any
 export const editarColaborador = async (req: Request, res: Response): Promise<any> => {
   try {
     const { id } = req.params;
-    const { codigo_funcionario, nome, data_nascimento, setor, unidade, apelido, email_corporativo, role } = req.body;
+    const { codigo_funcionario, nome, data_nascimento, setor, unidade, apelido, role } = req.body;
 
     if (!codigo_funcionario || !nome || !data_nascimento) {
       return res.status(400).json({ success: false, error: 'Código, Nome e Data Nascimento são obrigatórios' });
@@ -100,14 +103,14 @@ export const editarColaborador = async (req: Request, res: Response): Promise<an
         nome = ?,
         data_nascimento = ?,
         credencial_hash = ?,
-        setor = ?, unidade = ?, apelido = ?, email_corporativo = ?, role = ?
+        setor = ?, unidade = ?, apelido = ?, role = ?
        WHERE id = ?`,
       [
         encryptField(codigo_funcionario),
         encryptField(nome),
         encryptField(data_nascimento),
         credencialHash,
-        encryptField(setor), encryptField(unidade), encryptField(apelido), encryptField(email_corporativo), role,
+        encryptField(setor), encryptField(unidade), encryptField(apelido), role,
         id
       ]
     );
@@ -122,7 +125,7 @@ export const editarColaborador = async (req: Request, res: Response): Promise<an
 // ── Criar Colaborador (Admin) ──
 export const criarColaborador = async (req: Request, res: Response): Promise<any> => {
   try {
-    const { codigo_funcionario, nome, data_nascimento, setor, unidade, apelido, email_corporativo, role } = req.body;
+    const { codigo_funcionario, nome, data_nascimento, setor, unidade, apelido, role } = req.body;
 
     if (!codigo_funcionario || !nome || !data_nascimento) {
       return res.status(400).json({ success: false, error: 'Código, Nome e Data Nascimento são obrigatórios' });
@@ -142,14 +145,14 @@ export const criarColaborador = async (req: Request, res: Response): Promise<any
         nome,
         data_nascimento,
         credencial_hash,
-        setor, unidade, apelido, email_corporativo, role, ativo
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
+        setor, unidade, apelido, role, ativo
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
       [
         encryptField(codigo_funcionario),
         encryptField(nome),
         encryptField(data_nascimento),
         credencialHash,
-        encryptField(setor), encryptField(unidade), encryptField(apelido), encryptField(email_corporativo), role || 'USER'
+        encryptField(setor), encryptField(unidade), encryptField(apelido), role || 'USER'
       ]
     );
 
@@ -345,11 +348,13 @@ export const importarColaboradoresExcel = async (req: Request, res: Response): P
     for (const row of rows) {
       try {
         const chaves = Object.keys(row);
-        const keyCodigo = chaves.find(k => k.toLowerCase().match(/cod|matricula|registro|registro_funcionario/));
-        const keyNome = chaves.find(k => k.toLowerCase().match(/nome|funcionario|colaborador/));
-        const keyDataNasc = chaves.find(k => k.toLowerCase().match(/nasc|data|aniversario/));
-        const keySetor = chaves.find(k => k.toLowerCase().match(/setor|dpto|departamento|area/));
-        const keyUnidade = chaves.find(k => k.toLowerCase().match(/unid|filial|local|estabelecimento/));
+        const normalizeKey = (k: string) => k.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+        
+        const keyCodigo = chaves.find(k => normalizeKey(k).match(/cod|matricula|registro|registro_funcionario/));
+        const keyNome = chaves.find(k => normalizeKey(k).match(/nome|funcionario|colaborador/));
+        const keyDataNasc = chaves.find(k => normalizeKey(k).match(/nasc|data|aniversario/));
+        const keySetor = chaves.find(k => normalizeKey(k).match(/setor|dpto|departamento|area/));
+        const keyUnidade = chaves.find(k => normalizeKey(k).match(/unid|filial|local|estabelecimento/));
 
         if (!keyCodigo || !keyNome || !keyDataNasc) {
           throw new Error('Faltam colunas essenciais na linha (Código, Nome ou Data de Nascimento).');
@@ -405,5 +410,104 @@ export const importarColaboradoresExcel = async (req: Request, res: Response): P
   } catch (error: any) {
     console.error('Erro na importação de Excel de colaboradores:', error);
     return res.status(500).json({ success: false, error: 'Erro ao importar planilha de colaboradores.' });
+  }
+};
+
+export const resetarSenhaColaborador = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+
+    // 1. Buscar codigo_funcionario e data_nascimento atuais do banco
+    const [rows] = await pool.query<RowDataPacket[]>(
+      'SELECT codigo_funcionario, data_nascimento FROM colaboradores WHERE id = ? LIMIT 1',
+      [id]
+    );
+
+    const colaborador = rows[0];
+    if (!colaborador) {
+      return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    }
+
+    const codigoDecrypted = decryptField(colaborador.codigo_funcionario);
+    const dataNascDecrypted = decryptField(colaborador.data_nascimento);
+
+    if (!codigoDecrypted || !dataNascDecrypted) {
+      return res.status(500).json({ success: false, error: 'Erro ao descriptografar dados do colaborador.' });
+    }
+
+    // 2. Calcular o hash da credencial padrão (código + data de nascimento)
+    const credencialHashOriginal = hashCredencial(codigoDecrypted, dataNascDecrypted);
+
+    // 3. Resetar senha_alterada para 0 e credencial_hash para o original
+    await pool.query(
+      `UPDATE colaboradores 
+       SET senha_alterada = 0, credencial_hash = ?
+       WHERE id = ?`,
+      [credencialHashOriginal, id]
+    );
+
+    return res.status(200).json({
+      success: true,
+      message: 'Senha do colaborador resetada para a data de nascimento com sucesso!'
+    });
+  } catch (error) {
+    console.error('Erro ao resetar senha do colaborador:', error);
+    return res.status(500).json({ success: false, error: 'Erro ao resetar senha do colaborador.' });
+  }
+};
+
+// ── Editar pontos de um colaborador manualmente ──
+export const editarPontosColaborador = async (req: Request, res: Response): Promise<any> => {
+  try {
+    const { id } = req.params;
+    const { pontos_total } = req.body;
+
+    if (pontos_total === undefined || pontos_total === null || isNaN(Number(pontos_total))) {
+      return res.status(400).json({ success: false, error: 'Pontos inválidos. Informe um número.' });
+    }
+
+    const pontos = Number(pontos_total);
+
+    // Verifica se o colaborador existe
+    const [colabRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM colaboradores WHERE id = ? LIMIT 1',
+      [id]
+    );
+    if (!colabRows[0]) {
+      return res.status(404).json({ success: false, error: 'Colaborador não encontrado.' });
+    }
+
+    // Verifica se já existe entrada no ranking
+    const [rankingRows] = await pool.query<RowDataPacket[]>(
+      'SELECT id FROM ranking WHERE colaborador_id = ? LIMIT 1',
+      [id]
+    );
+
+    if (rankingRows[0]) {
+      await pool.query(
+        'UPDATE ranking SET pontos_total = ? WHERE colaborador_id = ?',
+        [pontos, id]
+      );
+    } else {
+      await pool.query(
+        'INSERT INTO ranking (colaborador_id, pontos_total, posicao, placares_exatos, acertos_resultado, erros, palpites_feitos) VALUES (?, ?, 0, 0, 0, 0, 0)',
+        [id, pontos]
+      );
+    }
+
+    // Recalcula as posições após a edição manual
+    await pool.query(`
+      UPDATE ranking r
+      JOIN (
+        SELECT colaborador_id, RANK() OVER (ORDER BY pontos_total DESC) AS nova_posicao
+        FROM ranking
+      ) ranked ON r.colaborador_id = ranked.colaborador_id
+      SET r.posicao = ranked.nova_posicao
+    `);
+
+    return res.status(200).json({ success: true, message: 'Pontos atualizados com sucesso!' });
+  } catch (error) {
+    console.error('Erro ao editar pontos do colaborador:', error);
+    return res.status(500).json({ success: false, error: 'Erro ao atualizar pontos.' });
   }
 };

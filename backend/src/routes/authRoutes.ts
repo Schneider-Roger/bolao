@@ -7,9 +7,9 @@ import { uploadPerfil } from '../middlewares/uploadMiddleware';
 import rateLimit from 'express-rate-limit';
 
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutos
+  windowMs: 2 * 60 * 1000, // 2 minutos
   max: 10, // 10 tentativas por IP
-  message: { success: false, error: 'Muitas tentativas de login. Tente novamente em 15 minutos.' }
+  message: { success: false, error: 'Muitas tentativas de login. Tente novamente em 2 minutos.' }
 });
 
 const router = Router();

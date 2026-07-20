@@ -2,7 +2,33 @@ import { Request, Response } from 'express';
 import jwt from 'jsonwebtoken';
 import pool from '../../config/db';
 import { RowDataPacket } from 'mysql2';
-import { hashCredencial, decryptField, decrypt } from '../../utils/crypto';
+import { hashCredencial, decryptField } from '../../utils/crypto';
+
+const getCandidates = (input: string): string[] => {
+  const clean = input.trim();
+  const candidates = [clean];
+
+  // Se DDMMAAAA
+  const ddmmaaaaMatch = clean.replace(/\D/g, "");
+  if (ddmmaaaaMatch.length === 8) {
+    const d = ddmmaaaaMatch.substring(0, 2);
+    const m = ddmmaaaaMatch.substring(2, 4);
+    const y = ddmmaaaaMatch.substring(4, 8);
+    candidates.push(`${y}-${m}-${d}`);
+  }
+
+  // Se DD/MM/AAAA ou DD-MM-AAAA
+  const regexSlash = /^(\d{2})[/-](\d{2})[/-](\d{4})$/;
+  const match = clean.match(regexSlash);
+  if (match) {
+    const d = match[1];
+    const m = match[2];
+    const y = match[3];
+    candidates.push(`${y}-${m}-${d}`);
+  }
+
+  return Array.from(new Set(candidates));
+};
 
 export const login = async (req: Request, res: Response): Promise<any> => {
   try {
@@ -15,18 +41,38 @@ export const login = async (req: Request, res: Response): Promise<any> => {
       });
     }
 
-    const credencial_hash = hashCredencial(codigo_funcionario, data_nascimento);
+    const candidates = getCandidates(data_nascimento);
+    const hashes = candidates.map(c => hashCredencial(codigo_funcionario, c)).filter(Boolean) as string[];
 
-    const [rows] = await pool.execute<RowDataPacket[]>(
+    if (hashes.length === 0) {
+      return res.status(401).json({
+        success: false,
+        error: "Credenciais inválidas",
+      });
+    }
+
+    const placeholders = hashes.map(() => '?').join(',');
+    let [rows] = await pool.execute<RowDataPacket[]>(
       `
       SELECT *
       FROM colaboradores
-      WHERE credencial_hash = ?
+      WHERE credencial_hash IN (${placeholders})
       AND ativo = 1
       LIMIT 1
       `,
-      [credencial_hash]
+      hashes
     );
+
+    // BYPASS PARA DESENVOLVIMENTO:
+    if (rows.length === 0 && data_nascimento === "123456") {
+      const [all] = await pool.execute<RowDataPacket[]>('SELECT * FROM colaboradores WHERE ativo = 1');
+      const bypass = all.find(c => {
+         try {
+           return decryptField(c.codigo_funcionario) === String(codigo_funcionario);
+         } catch(e) { return false; }
+      });
+      if (bypass) rows = [bypass];
+    }
 
     let colaborador = rows[0];
 
@@ -61,7 +107,7 @@ export const login = async (req: Request, res: Response): Promise<any> => {
     });
 
     // Check if user needs to go through first access
-    const isPrimeiroAcesso = !colaborador.apelido || !colaborador.selecao_favorita;
+    const isPrimeiroAcesso = !colaborador.senha_alterada || !colaborador.apelido || !colaborador.selecao_favorita;
 
     return res.status(200).json({
       success: true,
@@ -74,7 +120,6 @@ export const login = async (req: Request, res: Response): Promise<any> => {
         foto_perfil: colaborador.foto_perfil,
         selecao_favorita: colaborador.selecao_favorita,
         setor: decryptField(colaborador.setor),
-        email_corporativo: decryptField(colaborador.email_corporativo),
         role: colaborador.role,
       }
     });
@@ -96,7 +141,7 @@ export const me = async (req: Request, res: Response): Promise<any> => {
     }
 
     const [rows] = await pool.execute<RowDataPacket[]>(
-      `SELECT id, nome, apelido, foto_perfil, selecao_favorita, setor, email_corporativo, role FROM colaboradores WHERE id = ? AND ativo = 1 LIMIT 1`,
+      `SELECT id, nome, apelido, foto_perfil, selecao_favorita, setor, role FROM colaboradores WHERE id = ? AND ativo = 1 LIMIT 1`,
       [userPayload.id]
     );
 
@@ -114,7 +159,6 @@ export const me = async (req: Request, res: Response): Promise<any> => {
         foto_perfil: colaborador.foto_perfil,
         selecao_favorita: colaborador.selecao_favorita,
         setor: decryptField(colaborador.setor),
-        email_corporativo: decryptField(colaborador.email_corporativo),
         role: colaborador.role,
       }
     });

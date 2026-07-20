@@ -10,7 +10,8 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'bolao_copa_2026',
   waitForConnections: true,
   connectionLimit: 10,
-  queueLimit: 0
+  queueLimit: 0,
+  charset: 'utf8mb4'
 });
 
 export default pool;

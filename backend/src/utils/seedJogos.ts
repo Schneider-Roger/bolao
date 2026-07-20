@@ -8,7 +8,7 @@ const jogos = [
   // ─── 1ª RODADA ───
   // 11/06
   { r:1, f:'Grupo A', a:'México',           b:'África do Sul',       d:'2026-06-11 16:00:00', e:'2026-06-11 15:00:00' },
-  { r:1, f:'Grupo A', a:'Coreia do Sul',     b:'Tchéquia',            d:'2026-06-11 23:00:00', e:'2026-06-11 22:00:00' },
+  { r:1, f:'Grupo A', a:'Coreia do Sul',     b:'República Tcheca',    d:'2026-06-11 23:00:00', e:'2026-06-11 22:00:00' },
   // 12/06
   { r:1, f:'Grupo B', a:'Canadá',            b:'Bósnia & Herzegovina', d:'2026-06-12 16:00:00', e:'2026-06-12 15:00:00' },
   { r:1, f:'Grupo D', a:'Estados Unidos',    b:'Paraguai',            d:'2026-06-12 22:00:00', e:'2026-06-12 21:00:00' },
@@ -40,7 +40,7 @@ const jogos = [
 
   // ─── 2ª RODADA ───
   // 18/06
-  { r:2, f:'Grupo A', a:'Tchéquia',          b:'África do Sul',       d:'2026-06-18 13:00:00', e:'2026-06-18 12:00:00' },
+  { r:2, f:'Grupo A', a:'República Tcheca',  b:'África do Sul',       d:'2026-06-18 13:00:00', e:'2026-06-18 12:00:00' },
   { r:2, f:'Grupo B', a:'Suíça',             b:'Bósnia & Herzegovina', d:'2026-06-18 16:00:00', e:'2026-06-18 15:00:00' },
   { r:2, f:'Grupo B', a:'Canadá',            b:'Qatar',               d:'2026-06-18 19:00:00', e:'2026-06-18 18:00:00' },
   { r:2, f:'Grupo A', a:'México',            b:'Coreia do Sul',       d:'2026-06-18 22:00:00', e:'2026-06-18 21:00:00' },
@@ -76,7 +76,7 @@ const jogos = [
   { r:3, f:'Grupo B', a:'Bósnia & Herzegovina', b:'Qatar',            d:'2026-06-24 16:00:00', e:'2026-06-24 15:00:00' },
   { r:3, f:'Grupo C', a:'Escócia',           b:'Brasil',              d:'2026-06-24 19:00:00', e:'2026-06-24 18:00:00' },
   { r:3, f:'Grupo C', a:'Marrocos',          b:'Haiti',               d:'2026-06-24 19:00:00', e:'2026-06-24 18:00:00' },
-  { r:3, f:'Grupo A', a:'Tchéquia',          b:'México',              d:'2026-06-24 22:00:00', e:'2026-06-24 21:00:00' },
+  { r:3, f:'Grupo A', a:'República Tcheca',  b:'México',              d:'2026-06-24 22:00:00', e:'2026-06-24 21:00:00' },
   { r:3, f:'Grupo A', a:'África do Sul',     b:'Coreia do Sul',       d:'2026-06-24 22:00:00', e:'2026-06-24 21:00:00' },
   // 25/06
   { r:3, f:'Grupo E', a:'Equador',           b:'Alemanha',            d:'2026-06-25 17:00:00', e:'2026-06-25 16:00:00' },

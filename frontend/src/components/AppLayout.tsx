@@ -20,7 +20,7 @@ function AppLayout() {
     return (
         <main className="w-full overflow-x-hidden min-h-screen bg-surface text-on-surface font-body-md text-body-md flex flex-col selection:bg-primary-container selection:text-on-primary-container">
             {/* TopAppBar */}
-            <header className="bg-surface-container dark:bg-surface-container w-full top-0 sticky border-b border-white/10 backdrop-blur-xl bg-surface/60 shadow-sm z-40">
+            <header className="bg-[#0b1727] sm:bg-surface/60 w-full top-0 sticky border-b border-white/10 backdrop-blur-none sm:backdrop-blur-xl shadow-sm z-40">
                 <div className="flex justify-between items-center px-4 md:px-[100px] py-4 w-full max-w-container-max mx-auto gap-4">
                     {/* Leading: Avatar */}
                     <Link to="/perfil" className="w-10 h-10 rounded-full bg-surface-variant overflow-hidden border border-white/10 cursor-pointer active:scale-95 transition-transform flex-shrink-0 ring-2 ring-primary/30" title="Ver Perfil">
@@ -54,7 +54,7 @@ function AppLayout() {
             </section>
 
             {/* BottomNavBar */}
-            <nav className="fixed bottom-0 left-1/2 w-full max-w-md -translate-x-1/2 flex justify-around items-center h-20 px-4 pb-safe bg-surface-container/80 backdrop-blur-lg border-t border-white/10 shadow-[0_-4px_20px_rgba(0,130,55,0.15)] rounded-t-xl z-50">
+            <nav className="fixed bottom-0 left-1/2 w-full max-w-md -translate-x-1/2 flex justify-around items-center h-20 px-4 pb-safe bg-[#0b1727] sm:bg-surface-container/80 backdrop-blur-none sm:backdrop-blur-lg border-t border-white/10 shadow-[0_-4px_20px_rgba(0,130,55,0.15)] rounded-t-xl z-50">
                 {menuItems.map((item) => {
                     const active = location.pathname.startsWith(item.path);
 

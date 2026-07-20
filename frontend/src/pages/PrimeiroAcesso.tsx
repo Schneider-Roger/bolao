@@ -23,8 +23,9 @@ function PrimeiroAcesso() {
     const [foto, setFoto] = useState<File | null>(null);
     const [apelido, setApelido] = useState(user?.apelido || user?.nome || "");
     const [selecao, setSelecao] = useState(user?.selecao_favorita || "");
-    const [emailCorporativo, setEmailCorporativo] = useState(user?.email_corporativo || "");
     const [departamento, setDepartamento] = useState(user?.setor || "");
+    const [senha, setSenha] = useState("");
+    const [confirmarSenha, setConfirmarSenha] = useState("");
 
     const navigate = useNavigate();
 
@@ -41,9 +42,11 @@ function PrimeiroAcesso() {
             setPrimeiroAcessoCompleto({
                 apelido: data.colaborador.apelido,
                 selecao_favorita: data.colaborador.selecao_favorita,
-                foto_perfil: data.colaborador.foto_perfil
+                foto_perfil: data.colaborador.foto_perfil,
+                setor: data.colaborador.setor
             });
 
+            alert("Perfil atualizado e senha redefinida com sucesso!");
             navigate("/perfil");
         },
         onError: (error: any) => {
@@ -60,12 +63,22 @@ function PrimeiroAcesso() {
             return;
         }
 
+        if (!senha || senha.trim().length < 6) {
+            alert("Por favor, digite uma nova senha numérica com no mínimo 6 dígitos.");
+            return;
+        }
+
+        if (senha !== confirmarSenha) {
+            alert("A confirmação da senha não confere com a nova senha.");
+            return;
+        }
+
         const formData = new FormData();
         if (foto) formData.append("foto", foto);
         formData.append("apelido", apelido || user?.nome || "");
         formData.append("selecao_favorita", selecao);
-        if (emailCorporativo) formData.append('email_corporativo', emailCorporativo);
         if (departamento) formData.append('setor', departamento);
+        formData.append("nova_senha", senha.trim());
 
         primeiroAcessoMutation.mutate(formData);
     };
@@ -77,7 +90,7 @@ function PrimeiroAcesso() {
                 
                 {/* Top Header */}
                 <header className="bg-[#334155] w-full flex flex-col p-5 rounded-t-[24px]">
-                    <h1 className="font-headline-md text-xl font-bold text-white">Editar Perfil</h1>
+                    <h1 className="font-headline-md text-xl font-bold text-white">Configurar Meu Acesso</h1>
                 </header>
 
                 <form className="flex-grow flex flex-col gap-6 px-6 sm:px-12 mt-8" onSubmit={handleSubmit}>
@@ -123,21 +136,46 @@ function PrimeiroAcesso() {
                             </div>
                         </div>
 
-                        {/* E-mail */}
-                        <div className="bg-[#64748b] p-4 rounded-xl flex flex-col gap-3 shadow-sm opacity-80">
-                            <div className="flex flex-col gap-2">
-                                <div className="flex items-center gap-2 text-gray-200">
-                                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 0" }}>mail</span>
-                                    <label className="text-[11px] font-bold uppercase tracking-wider">E-mail</label>
+                        {/* Criar Nova Senha */}
+                        <div className="bg-[#475569] p-5 rounded-xl border-t-4 border-t-[#ffdb3c] shadow-md flex flex-col gap-4">
+                            <div className="flex items-center gap-2 text-white">
+                                <span className="material-symbols-outlined text-[#ffdb3c]" style={{ fontVariationSettings: "'FILL' 1" }}>lock</span>
+                                <h2 className="text-base font-bold">Definir Nova Senha</h2>
+                            </div>
+                            <p className="text-gray-300 text-xs">
+                                Crie uma senha numérica para proteger seu acesso.
+                            </p>
+                            <div className="flex items-start gap-2 bg-[#ffdb3c]/10 border border-[#ffdb3c]/30 rounded-lg px-3 py-2">
+                                <span className="material-symbols-outlined text-[#ffdb3c] text-[16px] mt-0.5" style={{ fontVariationSettings: "'FILL' 1" }}>info</span>
+                                <p className="text-[11px] text-[#ffdb3c] font-semibold leading-relaxed">
+                                    A nova senha deve ser diferente da sua data de nascimento e ter no mínimo 6 dígitos numéricos.
+                                </p>
+                            </div>
+                            <div className="flex flex-col gap-3">
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-200">Nova Senha</label>
+                                    <input 
+                                        className="bg-[#0f172a] border-none rounded-lg text-white text-sm py-3 px-4 w-full focus:ring-2 focus:ring-[#008237] outline-none" 
+                                        placeholder="Mínimo 6 dígitos numéricos" 
+                                        type="password" 
+                                        inputMode="numeric"
+                                        value={senha}
+                                        onChange={(e) => setSenha(e.target.value.replace(/\D/g, ""))}
+                                        required
+                                    />
                                 </div>
-                                <input 
-                                    className="bg-[#0f172a] border-none rounded-lg text-gray-400 text-sm py-3 px-4 w-full outline-none cursor-not-allowed" 
-                                    placeholder="Sem e-mail cadastrado" 
-                                    type="email" 
-                                    value={emailCorporativo}
-                                    readOnly
-                                    disabled
-                                />
+                                <div className="flex flex-col gap-1">
+                                    <label className="text-[11px] font-bold uppercase tracking-wider text-gray-200">Confirmar Nova Senha</label>
+                                    <input 
+                                        className="bg-[#0f172a] border-none rounded-lg text-white text-sm py-3 px-4 w-full focus:ring-2 focus:ring-[#008237] outline-none" 
+                                        placeholder="Repita os dígitos criados" 
+                                        type="password" 
+                                        inputMode="numeric"
+                                        value={confirmarSenha}
+                                        onChange={(e) => setConfirmarSenha(e.target.value.replace(/\D/g, ""))}
+                                        required
+                                    />
+                                </div>
                             </div>
                         </div>
 

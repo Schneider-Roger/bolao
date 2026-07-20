@@ -13,6 +13,7 @@ interface Jogo {
     status: string;
     placar_a: number | null;
     placar_b: number | null;
+    classificado?: string | null;
 }
 
 interface Colaborador {
@@ -26,6 +27,9 @@ interface Colaborador {
     email_corporativo: string;
     role: string;
     ativo: number;
+    pontos_total?: number;
+    senha_alterada?: number | boolean;
+    total_palpites?: number;
 }
 
 function Admin() {
@@ -89,6 +93,10 @@ function Admin() {
     const editColabMutation = useMutation({
         mutationFn: async (data: Colaborador) => {
             await api.put(`/admin/colaboradores/${data.id}`, data);
+            // Se pontos foram alterados, atualizar tambem
+            if (data.pontos_total !== undefined) {
+                await api.put(`/admin/colaboradores/${data.id}/pontos`, { pontos_total: data.pontos_total });
+            }
         },
         onSuccess: () => {
             alert("Colaborador atualizado com sucesso!");
@@ -125,7 +133,26 @@ function Admin() {
         }
     };
 
-    const [placares, setPlacares] = useState<Record<number, { a: string, b: string }>>({});
+    const resetPasswordMutation = useMutation({
+        mutationFn: async (id: number) => {
+            await api.post(`/admin/colaboradores/${id}/reset-password`);
+        },
+        onSuccess: () => {
+            alert("Senha resetada para a data de nascimento com sucesso!");
+            queryClient.invalidateQueries({ queryKey: ["admin-colaboradores"] });
+        },
+        onError: (err: any) => {
+            alert(err.response?.data?.error || "Erro ao resetar senha");
+        }
+    });
+
+    const handleResetPassword = (id: number, nome: string) => {
+        if (window.confirm(`Tem certeza de que deseja resetar a senha de "${nome}" para a data de nascimento padrão? Esta ação obrigará o usuário a passar pelo processo de primeiro acesso no próximo login. Palpites e pontos NÃO serão alterados.`)) {
+            resetPasswordMutation.mutate(id);
+        }
+    };
+
+    const [placares, setPlacares] = useState<Record<number, { a: string, b: string, classificado?: string | null }>>({});
     const [sincronizando, setSincronizando] = useState(false);
     const [recalculando, setRecalculando] = useState(false);
     const [arquivoExcel, setArquivoExcel] = useState<File | null>(null);
@@ -194,11 +221,11 @@ function Admin() {
         }
     };
 
-    const handleChangePlacar = (jogoId: number, tipo: 'a' | 'b', valor: string) => {
+    const handleChangePlacar = (jogoId: number, tipo: 'a' | 'b' | 'classificado', valor: string) => {
         setPlacares(prev => ({
             ...prev,
             [jogoId]: {
-                ...prev[jogoId] || { a: "", b: "" },
+                ...prev[jogoId] || { a: "", b: "", classificado: null },
                 [tipo]: valor
             }
         }));
@@ -206,10 +233,11 @@ function Admin() {
 
     // Mutação para salvar placar individual manual
     const resultadoMutation = useMutation({
-        mutationFn: async ({ id, placarA, placarB }: { id: number, placarA: number, placarB: number }) => {
+        mutationFn: async ({ id, placarA, placarB, classificado }: { id: number, placarA: number, placarB: number, classificado?: string | null }) => {
             await api.put(`/admin/jogos/${id}/resultado`, {
                 placar_a: placarA,
-                placar_b: placarB
+                placar_b: placarB,
+                classificado
             });
         },
         onSuccess: () => {
@@ -260,7 +288,23 @@ function Admin() {
             alert("Preencha os dois placares");
             return;
         }
-        resultadoMutation.mutate({ id: jogoId, placarA: parseInt(finalA), placarB: parseInt(finalB) });
+
+        const jogo = jogos?.find(j => j.id === jogoId);
+        const isMataMata = jogo && !jogo.fase.includes('Grupo');
+        const isTie = parseInt(finalA) === parseInt(finalB);
+
+        let classificadoFinal = p?.classificado;
+        if (isMataMata && isTie) {
+            if (!classificadoFinal && !jogo?.classificado) {
+                alert("Para jogos de mata-mata que terminam em empate, é obrigatório selecionar qual time se classificou nos pênaltis.");
+                return;
+            }
+            if (!classificadoFinal) {
+                classificadoFinal = jogo?.classificado;
+            }
+        }
+
+        resultadoMutation.mutate({ id: jogoId, placarA: parseInt(finalA), placarB: parseInt(finalB), classificado: isMataMata && isTie ? classificadoFinal : null });
     };
 
     if (isLoading) {
@@ -372,6 +416,26 @@ function Admin() {
                                             <div className="flex-1 text-center font-bold text-sm text-white truncate">{jogo.time_b}</div>
                                         </div>
 
+                                        {!jogo.fase.includes('Grupo') && parseInt(p.a) === parseInt(p.b) && p.a !== "" && p.b !== "" && (
+                                            <div className="flex flex-col gap-2 mt-2">
+                                                <label className="text-xs font-bold text-gray-400 text-center uppercase tracking-wider">Classificado (Pênaltis)</label>
+                                                <div className="flex items-center bg-[#0b1727] rounded-xl p-1 border border-[#2a3644]">
+                                                    <button 
+                                                        onClick={() => handleChangePlacar(jogo.id, 'classificado', jogo.time_a)}
+                                                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${p.classificado === jogo.time_a || (!p.classificado && jogo.classificado === jogo.time_a) ? 'bg-[#008237] text-white' : 'text-gray-400 hover:text-white'}`}
+                                                    >
+                                                        {jogo.time_a}
+                                                    </button>
+                                                    <button 
+                                                        onClick={() => handleChangePlacar(jogo.id, 'classificado', jogo.time_b)}
+                                                        className={`flex-1 py-1.5 rounded-lg text-xs font-bold transition-all ${p.classificado === jogo.time_b || (!p.classificado && jogo.classificado === jogo.time_b) ? 'bg-[#008237] text-white' : 'text-gray-400 hover:text-white'}`}
+                                                    >
+                                                        {jogo.time_b}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+
                                         <button onClick={() => handleSalvar(jogo.id, jogo.placar_a, jogo.placar_b)} disabled={resultadoMutation.isPending} className={`mt-2 py-3 rounded-xl font-bold text-sm transition-all shadow-md w-full ${estaPontuado ? "bg-[#2a3644] text-gray-400 hover:text-white" : "bg-[#FDE01A] text-[#061423] hover:brightness-110 active:scale-95"}`}>
                                             {estaPontuado ? 'Atualizar Placar' : 'Salvar Placar Final'}
                                         </button>
@@ -383,6 +447,43 @@ function Admin() {
                 </div>
                 ) : (
                 <div className="space-y-8 animate-in fade-in duration-300">
+                    {/* Painel de Métricas / KPI */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                        <div className="bg-[#1a2634] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-lg">
+                            <div className="p-3 bg-[#008237]/20 text-[#008237] rounded-xl flex items-center justify-center">
+                                <span className="material-symbols-outlined text-3xl">groups</span>
+                            </div>
+                            <div>
+                                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Total Cadastrados</p>
+                                <p className="text-white text-2xl font-black">{colaboradores?.length || 0}</p>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#1a2634] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-lg">
+                            <div className="p-3 bg-purple-500/20 text-purple-400 rounded-xl flex items-center justify-center">
+                                <span className="material-symbols-outlined text-3xl">sports_soccer</span>
+                            </div>
+                            <div>
+                                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Participantes Ativos</p>
+                                <p className="text-white text-2xl font-black">
+                                    {colaboradores?.filter(c => (c.total_palpites ?? 0) > 0).length || 0}
+                                </p>
+                            </div>
+                        </div>
+
+                        <div className="bg-[#1a2634] border border-white/5 p-5 rounded-2xl flex items-center gap-4 shadow-lg">
+                            <div className="p-3 bg-amber-500/20 text-amber-400 rounded-xl flex items-center justify-center">
+                                <span className="material-symbols-outlined text-3xl">lock_reset</span>
+                            </div>
+                            <div>
+                                <p className="text-gray-400 text-xs font-bold uppercase tracking-wider">Senha Pendente / Resetada</p>
+                                <p className="text-white text-2xl font-black">
+                                    {colaboradores?.filter(c => !c.senha_alterada).length || 0}
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
                     {/* Importação de Colaboradores via Excel */}
                     <section className="bg-[#1a2634] border border-white/5 p-6 rounded-2xl space-y-4 shadow-lg">
                         <h2 className="text-white font-bold text-lg">📥 Importar Base de Colaboradores</h2>
@@ -451,6 +552,8 @@ function Admin() {
                                             <th className="px-4 py-3">Código</th>
                                             <th className="px-4 py-3">Nome</th>
                                             <th className="px-4 py-3">Setor</th>
+                                            <th className="px-4 py-3 text-center">Senha</th>
+                                            <th className="px-4 py-3 text-center">Palpites</th>
                                             <th className="px-4 py-3">Role</th>
                                             <th className="px-4 py-3 text-right">Ação</th>
                                         </tr>
@@ -458,7 +561,7 @@ function Admin() {
                                     <tbody>
                                         {colaboradoresFiltrados?.length === 0 ? (
                                             <tr>
-                                                <td colSpan={5} className="px-4 py-8 text-center text-gray-500">Nenhum colaborador encontrado para essa busca.</td>
+                                                <td colSpan={7} className="px-4 py-8 text-center text-gray-500">Nenhum colaborador encontrado para essa busca.</td>
                                             </tr>
                                         ) : (
                                             colaboradoresFiltrados?.map(c => (
@@ -466,11 +569,29 @@ function Admin() {
                                                     <td className="px-4 py-3 font-mono">{c.codigo_funcionario}</td>
                                                     <td className="px-4 py-3 font-bold text-white">{c.nome}</td>
                                                     <td className="px-4 py-3">{c.setor}</td>
+                                                    <td className="px-4 py-3 text-center">
+                                                        {c.senha_alterada ? (
+                                                            <span className="bg-[#008237]/20 text-[#008237] text-[10px] px-2.5 py-1 rounded-full border border-[#008237]/40 font-bold uppercase tracking-wider">Definida</span>
+                                                        ) : (
+                                                            <span className="bg-amber-500/20 text-amber-400 text-[10px] px-2.5 py-1 rounded-full border border-amber-500/40 font-bold uppercase tracking-wider">Pendente</span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-4 py-3 text-center font-bold text-gray-200">
+                                                        {c.total_palpites !== undefined ? `${c.total_palpites} palpites` : "-"}
+                                                    </td>
                                                     <td className="px-4 py-3">{c.role}</td>
                                                     <td className="px-4 py-3 text-right">
                                                         <div className="flex justify-end gap-2">
                                                             <button onClick={() => setEditColab(c)} className="bg-[#0b1727] text-[#008237] hover:bg-[#008237] hover:text-white px-3 py-1.5 rounded-lg font-bold text-xs transition-colors border border-[#008237]/50" title="Editar">
                                                                 Editar
+                                                            </button>
+                                                            <button 
+                                                                onClick={() => handleResetPassword(c.id, c.nome)} 
+                                                                disabled={resetPasswordMutation.isPending}
+                                                                className="bg-gradient-to-r from-purple-600 to-pink-600 text-white hover:scale-105 px-3 py-1.5 rounded-lg font-bold text-xs transition-transform duration-200 flex items-center justify-center disabled:opacity-50"
+                                                                title="Resetar Senha"
+                                                            >
+                                                                <span className="material-symbols-outlined text-[16px]">lock_reset</span>
                                                             </button>
                                                             <button 
                                                                 onClick={() => handleDeleteColab(c.id, c.nome)} 
@@ -503,8 +624,8 @@ function Admin() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Código</label>
-                                        <input type="text" value={editColab.codigo_funcionario || ''} onChange={e => handleEditChange('codigo_funcionario', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
+                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Código (Apenas Números)</label>
+                                        <input type="text" value={editColab.codigo_funcionario || ''} onChange={e => handleEditChange('codigo_funcionario', e.target.value.replace(/\D/g, ""))} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nascimento (YYYY-MM-DD)</label>
@@ -521,15 +642,14 @@ function Admin() {
                                         <input type="text" value={editColab.unidade || ''} onChange={e => handleEditChange('unidade', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Apelido</label>
-                                        <input type="text" value={editColab.apelido || ''} onChange={e => handleEditChange('apelido', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">E-mail Corporativo</label>
-                                        <input type="text" value={editColab.email_corporativo || ''} onChange={e => handleEditChange('email_corporativo', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
-                                    </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Apelido</label>
+                                    <input type="text" value={editColab.apelido || ''} onChange={e => handleEditChange('apelido', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-amber-400 uppercase tracking-wider mb-1">⭐ Pontos no Ranking</label>
+                                    <input type="number" min="0" value={editColab.pontos_total ?? ''} onChange={e => handleEditChange('pontos_total', e.target.value === '' ? 0 : parseInt(e.target.value))} placeholder="0" className="w-full bg-[#0b1727] text-amber-400 font-bold px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-amber-400 border border-amber-400/20 transition-all" />
+                                    <p className="text-[10px] text-gray-500 mt-1">Editar os pontos atuais do colaborador no ranking</p>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Role (Nível de Acesso)</label>
@@ -562,8 +682,8 @@ function Admin() {
                                 </div>
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Código</label>
-                                        <input type="text" value={newColab.codigo_funcionario || ''} onChange={e => handleCreateChange('codigo_funcionario', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
+                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Código (Apenas Números)</label>
+                                        <input type="text" value={newColab.codigo_funcionario || ''} onChange={e => handleCreateChange('codigo_funcionario', e.target.value.replace(/\D/g, ""))} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
                                     </div>
                                     <div>
                                         <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Nascimento (YYYY-MM-DD)</label>
@@ -580,15 +700,9 @@ function Admin() {
                                         <input type="text" value={newColab.unidade || ''} onChange={e => handleCreateChange('unidade', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
                                     </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Apelido</label>
-                                        <input type="text" value={newColab.apelido || ''} onChange={e => handleCreateChange('apelido', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">E-mail Corporativo</label>
-                                        <input type="email" value={newColab.email_corporativo || ''} onChange={e => handleCreateChange('email_corporativo', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
-                                    </div>
+                                <div>
+                                    <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Apelido</label>
+                                    <input type="text" value={newColab.apelido || ''} onChange={e => handleCreateChange('apelido', e.target.value)} className="w-full bg-[#0b1727] text-white px-4 py-3 rounded-xl outline-none focus:ring-2 focus:ring-[#008237] border border-white/5 transition-all" />
                                 </div>
                                 <div>
                                     <label className="block text-xs font-bold text-gray-400 uppercase tracking-wider mb-1">Role (Nível de Acesso)</label>

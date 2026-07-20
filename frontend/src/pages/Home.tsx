@@ -103,7 +103,7 @@ function Home() {
                         Olá, {user?.apelido || primeiroNome}! 👋
                     </h1>
                 </div>
-                {user?.codigo_funcionario === "17866" ? (
+                {user?.role === "ADMIN" ? (
                     <button
                         onClick={() => navigate("/admin")}
                         className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs px-4 py-2 rounded-xl transition-all shadow-[0_0_15px_rgba(245,158,11,0.3)] active:scale-95 shrink-0"

@@ -7,6 +7,7 @@ import { useAuthStore } from "../stores/authStore";
 function Login() {
     const [codigo, setCodigo] = useState("");
     const [dataNascimento, setDataNascimento] = useState("");
+    const [showForgotModal, setShowForgotModal] = useState(false);
     const navigate = useNavigate();
     const loginStore = useAuthStore((state) => state.login);
 
@@ -37,19 +38,14 @@ function Login() {
             return;
         }
 
-        // Se a data vier no formato DDMMAAAA ou com barras/traços, vamos limpar e formatar para YYYY-MM-DD
-        const cleanDate = dataNascimento.replace(/\D/g, "");
-        let formattedDate = cleanDate;
-        if (cleanDate.length === 8) {
-            const d = cleanDate.substring(0, 2);
-            const m = cleanDate.substring(2, 4);
-            const y = cleanDate.substring(4, 8);
-            formattedDate = `${y}-${m}-${d}`;
-        }
+        // Remove caracteres não numéricos e envia a senha original digitada
+        // O backend do login já possui getCandidates() para resolver formatos de aniversário automaticamente,
+        // então não precisamos (e não devemos) reformatar a senha aqui, pois isso quebrava senhas novas com 8 dígitos
+        const cleanPassword = dataNascimento.replace(/\D/g, "");
 
         loginMutation.mutate({
             codigo_funcionario: codigo,
-            data_nascimento: formattedDate,
+            data_nascimento: cleanPassword,
         });
     };
 
@@ -98,7 +94,7 @@ function Login() {
                                     type="text"
                                     autoComplete="off"
                                     value={codigo}
-                                    onChange={(e) => setCodigo(e.target.value)}
+                                    onChange={(e) => setCodigo(e.target.value.replace(/\D/g, ""))}
                                 />
                             </div>
                         </div>
@@ -115,14 +111,21 @@ function Login() {
                                     placeholder=""
                                     required
                                     type="password"
-                                    autoComplete="new-password"
                                     inputMode="numeric"
-                                    pattern="[0-9]*"
+                                    autoComplete="new-password"
                                     value={dataNascimento}
-                                    onChange={(e) => setDataNascimento(e.target.value)}
+                                    onChange={(e) => setDataNascimento(e.target.value.replace(/\D/g, ""))}
                                 />
                             </div>
-                            <p className="text-[11px] text-gray-500 pl-1 mt-1"></p>
+                            <div className="flex justify-end -mt-1 pl-1">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowForgotModal(true)}
+                                    className="text-xs font-bold text-gray-400 hover:text-[#FDE01A] transition-colors focus:outline-none"
+                                >
+                                    Esqueci a senha
+                                </button>
+                            </div>
                         </div>
 
                         {/* Submit Button */}
@@ -137,6 +140,56 @@ function Login() {
                     </form>
                 </div>
             </main>
+
+            {/* Forgot Password Glassmorphic Modal */}
+            {showForgotModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+                    <div className="bg-[#0b1727]/95 border border-white/10 rounded-3xl p-6 md:p-8 shadow-2xl max-w-md w-full flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-200">
+                        <div className="flex items-center justify-between border-b border-white/10 pb-4">
+                            <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                                <span className="material-symbols-outlined text-[#FDE01A]">lock_reset</span>
+                                Recuperação de Senha
+                            </h3>
+                            <button
+                                onClick={() => setShowForgotModal(false)}
+                                className="w-8 h-8 rounded-full bg-white/5 text-gray-400 hover:text-white flex items-center justify-center transition-colors focus:outline-none"
+                            >
+                                <span className="material-symbols-outlined text-xl">close</span>
+                            </button>
+                        </div>
+                        
+                        <div className="flex flex-col gap-4 text-sm text-gray-300">
+                            <p>
+                                Se você esqueceu sua senha ou deseja redefini-la, você pode solicitar a redefinição diretamente para a equipe organizadora.
+                            </p>
+                            <p className="bg-[#1a2634] p-4 rounded-xl border border-white/5 text-xs font-mono text-gray-400 leading-relaxed">
+                                <strong>Destinatário:</strong> cultura@copercana.com.br <br />
+                                <strong>Assunto:</strong> Recuperação de Senha - Bolão 2026
+                            </p>
+                            <p>
+                                Ao clicar no botão abaixo, seu aplicativo de e-mail será aberto automaticamente com as informações preenchidas. Basta enviar a solicitação!
+                            </p>
+                        </div>
+
+                        <div className="flex flex-col gap-3 mt-2">
+                            <a
+                                href={`mailto:cultura@copercana.com.br?subject=Recuperação de Senha - Bolão 2026&body=Olá,%0D%0A%0D%0ASolicito a redefinição da minha senha de acesso ao Bolão 2026.%0D%0A%0D%0AMeus dados:%0D%0ACódigo de Funcionário: ${codigo || '_______'}%0D%0A Nome completo:`}
+                                onClick={() => setShowForgotModal(false)}
+                                className="w-full py-4 bg-[#FDE01A] text-[#061423] font-black uppercase text-center tracking-wider rounded-xl hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2 shadow-[0_4px_15px_rgba(253,224,26,0.3)]"
+                            >
+                                <span className="material-symbols-outlined text-[20px]">mail</span>
+                                Enviar E-mail
+                            </a>
+                            <button
+                                onClick={() => setShowForgotModal(false)}
+                                className="w-full py-3 bg-white/5 text-white font-bold uppercase tracking-wider rounded-xl hover:bg-white/10 active:scale-95 transition-all"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

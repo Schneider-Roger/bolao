@@ -12,6 +12,8 @@ import {
   exportarRanking,
   sincronizarGEManual,
   importarColaboradoresExcel,
+  resetarSenhaColaborador,
+  editarPontosColaborador,
 } from '../controllers/admin/adminController';
 import multer from 'multer';
 
@@ -63,6 +65,8 @@ router.post('/colaboradores', criarColaborador);
 router.put('/colaboradores/:id', editarColaborador);
 router.patch('/colaboradores/:id/ativo', toggleColaboradorAtivo);
 router.delete('/colaboradores/:id', excluirColaborador);
+router.post('/colaboradores/:id/reset-password', resetarSenhaColaborador);
+router.put('/colaboradores/:id/pontos', editarPontosColaborador);
 router.post('/colaboradores/importar', upload.single('planilha'), importarColaboradoresExcel);
 
 export default router;

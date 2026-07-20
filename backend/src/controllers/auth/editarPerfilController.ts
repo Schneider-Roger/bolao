@@ -1,13 +1,15 @@
 import { Request, Response } from 'express';
 import pool from '../../config/db';
-import { ResultSetHeader } from 'mysql2';
+import { ResultSetHeader, RowDataPacket } from 'mysql2';
 import { encryptField } from '../../utils/crypto';
+import fs from 'fs';
+import path from 'path';
 
 export const editarPerfil = async (req: Request, res: Response): Promise<any> => {
   try {
     // @ts-ignore
     const colaboradorId = req.user.id;
-    const { apelido, selecao_favorita, email_corporativo, setor } = req.body;
+    const { apelido, selecao_favorita, setor, remover_foto } = req.body;
     const file = req.file;
 
     if (!apelido || !selecao_favorita) {
@@ -17,17 +19,47 @@ export const editarPerfil = async (req: Request, res: Response): Promise<any> =>
       });
     }
 
+    // Buscar foto_perfil atual
+    const [currentRows] = await pool.execute<RowDataPacket[]>(
+      'SELECT foto_perfil FROM colaboradores WHERE id = ? LIMIT 1',
+      [colaboradorId]
+    );
+    const oldFoto = currentRows[0]?.foto_perfil || null;
+    let foto_perfil = oldFoto;
+
     let query = `
       UPDATE colaboradores
-      SET apelido = ?, selecao_favorita = ?, email_corporativo = ?, setor = ?
+      SET apelido = ?, selecao_favorita = ?, setor = ?
     `;
-    const params: any[] = [encryptField(apelido), selecao_favorita, encryptField(email_corporativo), encryptField(setor)];
+    const params: any[] = [encryptField(apelido), selecao_favorita, encryptField(setor)];
 
-    let foto_perfil = null;
+    let deveDeletarFotoAntiga = false;
+
     if (file) {
       foto_perfil = `/uploads/perfis/${file.filename}`;
       query += `, foto_perfil = ?`;
       params.push(foto_perfil);
+      if (oldFoto) {
+        deveDeletarFotoAntiga = true;
+      }
+    } else if (remover_foto === 'true' || remover_foto === true) {
+      foto_perfil = null;
+      query += `, foto_perfil = NULL`;
+      if (oldFoto) {
+        deveDeletarFotoAntiga = true;
+      }
+    }
+
+    if (deveDeletarFotoAntiga && oldFoto) {
+      try {
+        const normalizedPath = oldFoto.startsWith('/') ? oldFoto.substring(1) : oldFoto;
+        const absolutePath = path.join(__dirname, '..', '..', '..', normalizedPath);
+        if (fs.existsSync(absolutePath)) {
+          fs.unlinkSync(absolutePath);
+        }
+      } catch (err) {
+        console.error('Erro ao deletar foto antiga do perfil:', err);
+      }
     }
 
     query += ` WHERE id = ?`;
@@ -50,7 +82,6 @@ export const editarPerfil = async (req: Request, res: Response): Promise<any> =>
         apelido,
         selecao_favorita,
         foto_perfil,
-        email_corporativo,
         setor
       }
     });
@@ -63,3 +94,4 @@ export const editarPerfil = async (req: Request, res: Response): Promise<any> =>
     });
   }
 };
+

@@ -19,6 +19,7 @@ const initDb = async () => {
         ativo BOOLEAN DEFAULT true,
         bracket_mata_mata_salvo BOOLEAN DEFAULT false,
         email_corporativo TEXT,
+        senha_alterada BOOLEAN DEFAULT false,
         role ENUM('USER', 'ADMIN') DEFAULT 'USER'
       )
     `);
@@ -93,6 +94,35 @@ const initDb = async () => {
       )
     `);
 
+    // Tentar adicionar coluna senha_alterada se a tabela já existir no banco de dados
+    try {
+      await connection.query(`
+        ALTER TABLE colaboradores ADD COLUMN senha_alterada BOOLEAN DEFAULT false
+      `);
+      console.log('Column senha_alterada added successfully');
+    } catch (err: any) {
+      if (err.errno === 1060 || err.code === 'ER_DUP_FIELDNAME') {
+        console.log('Column senha_alterada already exists');
+      } else {
+        console.warn('Could not add column senha_alterada (might already exist):', err.message);
+      }
+    }
+
+    // Renomear Tchéquia para República Tcheca no banco de dados para consistência
+    console.log('Renaming Tchéquia to República Tcheca in DB...');
+    await connection.query("UPDATE jogos SET time_a = 'República Tcheca' WHERE time_a = 'Tchéquia'");
+    await connection.query("UPDATE jogos SET time_b = 'República Tcheca' WHERE time_b = 'Tchéquia'");
+    await connection.query("UPDATE jogos SET classificado = 'República Tcheca' WHERE classificado = 'Tchéquia'");
+    await connection.query("UPDATE palpites SET confronto_time_a = 'República Tcheca' WHERE confronto_time_a = 'Tchéquia'");
+    await connection.query("UPDATE palpites SET confronto_time_b = 'República Tcheca' WHERE confronto_time_b = 'Tchéquia'");
+    await connection.query("UPDATE palpites SET time_classificado_palpite = 'República Tcheca' WHERE time_classificado_palpite = 'Tchéquia'");
+    await connection.query("UPDATE palpites_especiais SET campeao_palpite = 'República Tcheca' WHERE campeao_palpite = 'Tchéquia'");
+    await connection.query("UPDATE palpites_especiais SET vice_palpite = 'República Tcheca' WHERE vice_palpite = 'Tchéquia'");
+    await connection.query("UPDATE palpites_especiais SET terceiro_palpite = 'República Tcheca' WHERE terceiro_palpite = 'Tchéquia'");
+    await connection.query("UPDATE palpites_especiais SET quarto_palpite = 'República Tcheca' WHERE quarto_palpite = 'Tchéquia'");
+    await connection.query("UPDATE colaboradores SET selecao_favorita = 'República Tcheca' WHERE selecao_favorita = 'Tchéquia'");
+    console.log('Czech Republic renamed successfully in DB');
+
     console.log('Database tables initialized successfully');
     connection.release();
     process.exit(0);
@@ -103,3 +133,4 @@ const initDb = async () => {
 };
 
 initDb();
+

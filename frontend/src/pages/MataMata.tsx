@@ -22,10 +22,12 @@ interface Palpite {
     time_classificado_palpite: string | null;
     confronto_time_a: string | null;
     confronto_time_b: string | null;
+    lado_classificado?: 'a' | 'b' | null;
 }
 
 interface BracketData {
     success: boolean;
+    liberado: boolean;
     bracketSalvo: boolean;
     jogos: Jogo[];
     palpites: Palpite[];
@@ -51,7 +53,12 @@ function MataMata() {
             const initial: Record<number, Palpite> = {};
             
             data.palpites.forEach((p) => {
-                initial[p.jogo_id] = { ...p };
+                let lado: 'a' | 'b' | null = null;
+                if (p.time_classificado_palpite) {
+                    if (p.time_classificado_palpite === p.confronto_time_a) lado = 'a';
+                    else if (p.time_classificado_palpite === p.confronto_time_b) lado = 'b';
+                }
+                initial[p.jogo_id] = { ...p, lado_classificado: lado };
             });
 
             data.jogos.forEach((j) => {
@@ -63,6 +70,7 @@ function MataMata() {
                         time_classificado_palpite: null,
                         confronto_time_a: j.time_a,
                         confronto_time_b: j.time_b,
+                        lado_classificado: null,
                     };
                 }
             });
@@ -71,12 +79,47 @@ function MataMata() {
         }
     }, [data]);
 
+    const singleSaveMutation = useMutation({
+        mutationFn: async (payload: { jogoId: number, palpiteA: number | null, palpiteB: number | null, classificado: string | null }) => {
+            const res = await api.post(`/jogos/palpitar/${payload.jogoId}`, {
+                palpite_a: payload.palpiteA,
+                palpite_b: payload.palpiteB,
+                classificado: payload.classificado
+            });
+            return res.data;
+        },
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: ["bracket"] });
+        },
+        onError: (err: any) => {
+            alert(err.response?.data?.error || "Erro ao salvar palpite individual.");
+        }
+    });
+
+    const isJogoBloqueado = (jogo: Jogo) => {
+        const encerramentoTime = jogo.encerramento_palpite 
+            ? new Date(jogo.encerramento_palpite).getTime() 
+            : new Date(jogo.data).getTime() - 60 * 60 * 1000;
+        return Date.now() > encerramentoTime || jogo.status !== 'aberto';
+    };
+
+    const handlePlacarBlur = (jogoId: number) => {
+        const palpite = bracketPalpites[jogoId];
+        if (!palpite || palpite.palpite_a === null || palpite.palpite_b === null) return;
+        
+        singleSaveMutation.mutate({
+            jogoId,
+            palpiteA: palpite.palpite_a,
+            palpiteB: palpite.palpite_b,
+            classificado: palpite.time_classificado_palpite
+        });
+    };
+
     const mutation = useMutation({
         mutationFn: async (payload: Palpite[]) => {
             return await api.post("/jogos/bracket/salvar", { palpites: payload });
         },
         onSuccess: () => {
-            alert("Bracket de mata-mata salvo com sucesso!");
             queryClient.invalidateQueries({ queryKey: ["bracket"] });
         },
         onError: (err: any) => {
@@ -95,14 +138,28 @@ function MataMata() {
         );
     }
 
-    const { jogos, bracketSalvo } = data;
+    const { jogos, bracketSalvo, liberado } = data;
 
-    const jogos16 = jogos.slice(0, 16);
+    const jogos16_raw = jogos.slice(0, 16);
+    // Reordena visualmente os 16-avos para que fiquem pareados conforme a árvore do bracket
+    const bracketOrder16 = [
+        0, 1, 2, 3, 4, 5, 6, 7, 
+        8, 9, 10, 11, 12, 13, 14, 15
+    ];
+    const jogos16 = bracketOrder16.map(idx => jogos16_raw[idx]);
+    
     const oitavas = jogos.slice(16, 24);
     const quartas = jogos.slice(24, 28);
     const semis = jogos.slice(28, 30);
     const terceiroLugar = jogos.slice(30, 31);
     const finalJogo = jogos.slice(31, 32);
+
+    const indexToId: Record<number, number> = {};
+    const idToIndex: Record<number, number> = {};
+    jogos.forEach((j, idx) => {
+        indexToId[idx] = j.id;
+        idToIndex[j.id] = idx;
+    });
 
     const atualizarConfrontosProximos = (currentState: Record<number, Palpite>) => {
         const updated = { ...currentState };
@@ -130,64 +187,71 @@ function MataMata() {
             return null;
         };
 
-        const feed16toOitavas = [
-            { oitavasId: 89, timeAFrom: 73, timeBFrom: 74 },
-            { oitavasId: 90, timeAFrom: 75, timeBFrom: 76 },
-            { oitavasId: 91, timeAFrom: 77, timeBFrom: 78 },
-            { oitavasId: 92, timeAFrom: 79, timeBFrom: 80 },
-            { oitavasId: 93, timeAFrom: 81, timeBFrom: 82 },
-            { oitavasId: 94, timeAFrom: 83, timeBFrom: 84 },
-            { oitavasId: 95, timeAFrom: 85, timeBFrom: 86 },
-            { oitavasId: 96, timeAFrom: 87, timeBFrom: 88 },
+        // Mapeamento explícito por ID para garantir a ordem independentemente de data_hora
+        const feed16toOitavasIds = [
+            { oitavasId: 113, timeAFromId: 99, timeBFromId: 102 }, // O1: Alemanha x Paraguai vs França x Suécia
+            { oitavasId: 114, timeAFromId: 97, timeBFromId: 100 }, // O2: África do Sul x Canadá vs Holanda x Marrocos
+            { oitavasId: 115, timeAFromId: 108, timeBFromId: 107 }, // O3: Portugal x Croácia vs Espanha x Áustria
+            { oitavasId: 116, timeAFromId: 106, timeBFromId: 105 }, // O4: EUA x Bósnia vs Bélgica x Senegal
+            { oitavasId: 117, timeAFromId: 98, timeBFromId: 101 }, // O5: Brasil x Japão vs C. do Marfim x Noruega
+            { oitavasId: 118, timeAFromId: 103, timeBFromId: 104 }, // O6: México x Equador vs Inglaterra x RD Congo
+            { oitavasId: 119, timeAFromId: 111, timeBFromId: 110 }, // O7: Argentina x Cabo Verde vs Austrália x Egito
+            { oitavasId: 120, timeAFromId: 109, timeBFromId: 112 }, // O8: Suíça x Argélia vs Colômbia x Gana
         ];
 
-        feed16toOitavas.forEach(({ oitavasId, timeAFrom, timeBFrom }) => {
-            if (updated[oitavasId]) {
-                updated[oitavasId]!.confronto_time_a = getVencedor(timeAFrom) || "A Definir";
-                updated[oitavasId]!.confronto_time_b = getVencedor(timeBFrom) || "A Definir";
+        feed16toOitavasIds.forEach(({ oitavasId, timeAFromId, timeBFromId }) => {
+            if (oitavasId && timeAFromId && timeBFromId && updated[oitavasId]) {
+                updated[oitavasId]!.confronto_time_a = getVencedor(timeAFromId) || "A Definir";
+                updated[oitavasId]!.confronto_time_b = getVencedor(timeBFromId) || "A Definir";
             }
         });
 
-        const feedOitavasToQuartas = [
-            { quartasId: 97, timeAFrom: 89, timeBFrom: 90 },
-            { quartasId: 98, timeAFrom: 91, timeBFrom: 92 },
-            { quartasId: 99, timeAFrom: 93, timeBFrom: 94 },
-            { quartasId: 100, timeAFrom: 95, timeBFrom: 96 },
+        const feedOitavasToQuartasIds = [
+            { quartasId: 121, timeAFromId: 114, timeBFromId: 113 }, // Q1: O2 vs O1
+            { quartasId: 122, timeAFromId: 116, timeBFromId: 115 }, // Q2: O4 vs O3
+            { quartasId: 123, timeAFromId: 117, timeBFromId: 118 }, // Q3: O5 vs O6
+            { quartasId: 124, timeAFromId: 120, timeBFromId: 119 }, // Q4: O8 vs O7
         ];
 
-        feedOitavasToQuartas.forEach(({ quartasId, timeAFrom, timeBFrom }) => {
-            if (updated[quartasId]) {
-                updated[quartasId]!.confronto_time_a = getVencedor(timeAFrom) || "A Definir";
-                updated[quartasId]!.confronto_time_b = getVencedor(timeBFrom) || "A Definir";
+        feedOitavasToQuartasIds.forEach(({ quartasId, timeAFromId, timeBFromId }) => {
+            if (quartasId && timeAFromId && timeBFromId && updated[quartasId]) {
+                updated[quartasId]!.confronto_time_a = getVencedor(timeAFromId) || "A Definir";
+                updated[quartasId]!.confronto_time_b = getVencedor(timeBFromId) || "A Definir";
             }
         });
 
-        const feedQuartasToSemis = [
-            { semisId: 101, timeAFrom: 97, timeBFrom: 98 },
-            { semisId: 102, timeAFrom: 99, timeBFrom: 100 },
+        const feedQuartasToSemisIds = [
+            { semisId: 125, timeAFromId: 121, timeBFromId: 122 }, // S1: Q1 vs Q2
+            { semisId: 126, timeAFromId: 123, timeBFromId: 124 }, // S2: Q3 vs Q4
         ];
 
-        feedQuartasToSemis.forEach(({ semisId, timeAFrom, timeBFrom }) => {
-            if (updated[semisId]) {
-                updated[semisId]!.confronto_time_a = getVencedor(timeAFrom) || "A Definir";
-                updated[semisId]!.confronto_time_b = getVencedor(timeBFrom) || "A Definir";
+        feedQuartasToSemisIds.forEach(({ semisId, timeAFromId, timeBFromId }) => {
+            if (semisId && timeAFromId && timeBFromId && updated[semisId]) {
+                updated[semisId]!.confronto_time_a = getVencedor(timeAFromId) || "A Definir";
+                updated[semisId]!.confronto_time_b = getVencedor(timeBFromId) || "A Definir";
             }
         });
 
-        if (updated[104]) {
-            updated[104]!.confronto_time_a = getVencedor(101) || "A Definir";
-            updated[104]!.confronto_time_b = getVencedor(102) || "A Definir";
+        const finalId = 128;
+        const terceiroId = 127;
+        const semi1Id = 125;
+        const semi2Id = 126;
+
+        if (finalId && semi1Id && semi2Id && updated[finalId]) {
+            updated[finalId]!.confronto_time_a = getVencedor(semi1Id) || "A Definir";
+            updated[finalId]!.confronto_time_b = getVencedor(semi2Id) || "A Definir";
         }
-        if (updated[103]) {
-            updated[103]!.confronto_time_a = getPerdedor(101) || "A Definir";
-            updated[103]!.confronto_time_b = getPerdedor(102) || "A Definir";
+        if (terceiroId && semi1Id && semi2Id && updated[terceiroId]) {
+            updated[terceiroId]!.confronto_time_a = getPerdedor(semi1Id) || "A Definir";
+            updated[terceiroId]!.confronto_time_b = getPerdedor(semi2Id) || "A Definir";
         }
 
         return updated;
     };
 
     const handlePlacarChange = (jogoId: number, lado: 'a' | 'b', val: string) => {
-        if (bracketSalvo) return;
+        const jogo = listaJogos.find(j => j.id === jogoId);
+        if (jogo && isJogoBloqueado(jogo)) return;
 
         setBracketPalpites((prev) => {
             const next = { ...prev };
@@ -200,23 +264,66 @@ function MataMata() {
                 if (next[jogoId]!.palpite_a !== null && next[jogoId]!.palpite_b !== null) {
                     if (Number(next[jogoId]!.palpite_a) > Number(next[jogoId]!.palpite_b)) {
                         next[jogoId]!.time_classificado_palpite = next[jogoId]!.confronto_time_a;
+                        next[jogoId]!.lado_classificado = 'a';
                     } else if (Number(next[jogoId]!.palpite_b) > Number(next[jogoId]!.palpite_a)) {
                         next[jogoId]!.time_classificado_palpite = next[jogoId]!.confronto_time_b;
+                        next[jogoId]!.lado_classificado = 'b';
+                    } else {
+                        // Empate limpa seleção automática
+                        next[jogoId]!.time_classificado_palpite = null;
+                        next[jogoId]!.lado_classificado = null;
                     }
                 }
+                return atualizarConfrontosProximos(next);
             }
 
-            return atualizarConfrontosProximos(next);
+            return next;
         });
     };
 
-    const handleSelectClassificado = (jogoId: number, time: string) => {
-        if (bracketSalvo) return;
+    const handleSelectClassificado = (jogoId: number, time: string, lado: 'a' | 'b') => {
+        const jogo = listaJogos.find(j => j.id === jogoId);
+        if (jogo && isJogoBloqueado(jogo)) return;
 
         setBracketPalpites((prev) => {
             const next = { ...prev };
             if (next[jogoId]) {
                 next[jogoId]!.time_classificado_palpite = time;
+                next[jogoId]!.lado_classificado = lado;
+
+                // Salva automaticamente se placares já estiverem preenchidos
+                if (next[jogoId]!.palpite_a !== null && next[jogoId]!.palpite_b !== null) {
+                    singleSaveMutation.mutate({
+                        jogoId,
+                        palpiteA: next[jogoId]!.palpite_a,
+                        palpiteB: next[jogoId]!.palpite_b,
+                        classificado: time
+                    });
+                }
+            }
+            return atualizarConfrontosProximos(next);
+        });
+    };
+
+    const handleLimparClassificado = (jogoId: number) => {
+        const jogo = listaJogos.find(j => j.id === jogoId);
+        if (jogo && isJogoBloqueado(jogo)) return;
+
+        setBracketPalpites((prev) => {
+            const next = { ...prev };
+            if (next[jogoId]) {
+                next[jogoId]!.time_classificado_palpite = null;
+                next[jogoId]!.lado_classificado = null;
+
+                // Salva automaticamente se placares já estiverem preenchidos
+                if (next[jogoId]!.palpite_a !== null && next[jogoId]!.palpite_b !== null) {
+                    singleSaveMutation.mutate({
+                        jogoId,
+                        palpiteA: next[jogoId]!.palpite_a,
+                        palpiteB: next[jogoId]!.palpite_b,
+                        classificado: null
+                    });
+                }
             }
             return atualizarConfrontosProximos(next);
         });
@@ -224,20 +331,27 @@ function MataMata() {
 
     const handleSave = () => {
         const payload: Palpite[] = [];
-        let valid = true;
+        let placaresFaltando = 0;
+        let empatesSemSelecao = 0;
 
         Object.values(bracketPalpites).forEach((p) => {
             if (p.palpite_a === null || p.palpite_b === null) {
-                valid = false;
-            }
-            if (p.palpite_a === p.palpite_b && !p.time_classificado_palpite) {
-                valid = false;
+                placaresFaltando++;
+            } else if (Number(p.palpite_a) === Number(p.palpite_b) && !p.time_classificado_palpite) {
+                empatesSemSelecao++;
             }
             payload.push(p);
         });
 
-        if (!valid) {
-            alert("Por favor, preencha todos os placares e selecione o classificado em caso de empate antes de salvar seu bracket.");
+        if (placaresFaltando > 0 || empatesSemSelecao > 0) {
+            let msg = "Atenção! Seu chaveamento não pôde ser salvo pelos seguintes motivos:\n\n";
+            if (placaresFaltando > 0) {
+                msg += `• Faltam preencher os placares de ${placaresFaltando} jogo(s) nas fases do chaveamento (é necessário preencher todas as abas e todos os 32 confrontos até a Final).\n\n`;
+            }
+            if (empatesSemSelecao > 0) {
+                msg += `• Há ${empatesSemSelecao} jogo(s) empatado(s) onde você não escolheu qual time avança. Clique em 'Avança' no time desejado.\n\n`;
+            }
+            alert(msg);
             return;
         }
 
@@ -255,85 +369,113 @@ function MataMata() {
             confronto_time_b: jogo.time_b
         };
 
-        const timeA = bracketSalvo ? (jogo.time_a !== "A Definir" ? jogo.time_a : palpite.confronto_time_a) : palpite.confronto_time_a;
-        const timeB = bracketSalvo ? (jogo.time_b !== "A Definir" ? jogo.time_b : palpite.confronto_time_b) : palpite.confronto_time_b;
+        const timeA = palpite.confronto_time_a || "A Definir";
+        const timeB = palpite.confronto_time_b || "A Definir";
 
         const isEmpate = palpite.palpite_a !== null && palpite.palpite_b !== null && Number(palpite.palpite_a) === Number(palpite.palpite_b);
 
         return (
-            <article key={jogo.id} className="rounded-3xl glass-panel p-5 space-y-4 shadow-xl border border-white/5 relative overflow-hidden transition-all hover:border-white/10">
-                <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-400">
-                    <span className="bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5">{jogo.fase}</span>
-                    <span>{new Date(jogo.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
-                </div>
-
-                <div className="flex items-center justify-between gap-3 pt-2">
-                    {/* Time A */}
-                    <div className="flex-1 text-center space-y-2.5 min-w-0">
-                        <div className="font-extrabold text-xs sm:text-sm truncate text-white">{timeA || "A Definir"}</div>
-                        {isEmpate && !bracketSalvo && (
-                            <button
-                                onClick={() => handleSelectClassificado(jogo.id, timeA || "")}
-                                className={`text-[9px] px-2.5 py-1 rounded-xl font-black uppercase transition-all shadow-sm ${
-                                    palpite.time_classificado_palpite === timeA
-                                        ? "bg-emerald-500 text-slate-950 font-black shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                                        : "bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10"
-                                }`}
-                            >
-                                Avança
-                            </button>
-                        )}
-                        {isEmpate && bracketSalvo && palpite.time_classificado_palpite === timeA && (
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/10 font-black uppercase">
-                                Avança
-                            </span>
-                        )}
+            <article key={jogo.id} className="rounded-3xl glass-panel p-5 space-y-4 shadow-xl border border-white/5 relative overflow-hidden transition-all hover:border-white/10 flex flex-col justify-between min-h-[200px]">
+                <div>
+                    <div className="flex justify-between items-center text-[10px] font-black uppercase tracking-wider text-slate-400">
+                        <span className="bg-white/5 px-2.5 py-0.5 rounded-full border border-white/5">{jogo.fase}</span>
+                        <span>{new Date(jogo.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}</span>
                     </div>
 
-                    {/* Inputs de placar holográficos */}
-                    <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 bg-slate-950/40 rounded-2xl border border-white/5 shadow-inner">
-                        <input
-                            type="number"
-                            min="0"
-                            placeholder="-"
-                            value={palpite.palpite_a !== null ? palpite.palpite_a : ""}
-                            onChange={(e) => handlePlacarChange(jogo.id, 'a', e.target.value)}
-                            disabled={bracketSalvo}
-                            className="w-10 h-10 rounded-xl bg-slate-900 text-center text-lg font-black text-white outline-none border border-white/5 focus:border-emerald-500 disabled:opacity-50"
-                        />
-                        <span className="text-slate-600 font-black text-xs">×</span>
-                        <input
-                            type="number"
-                            min="0"
-                            placeholder="-"
-                            value={palpite.palpite_b !== null ? palpite.palpite_b : ""}
-                            onChange={(e) => handlePlacarChange(jogo.id, 'b', e.target.value)}
-                            disabled={bracketSalvo}
-                            className="w-10 h-10 rounded-xl bg-slate-900 text-center text-lg font-black text-white outline-none border border-white/5 focus:border-emerald-500 disabled:opacity-50"
-                        />
+                    <div className="flex items-center justify-between gap-3 pt-4">
+                        {/* Time A */}
+                        <div className="flex-1 text-center space-y-2.5 min-w-0">
+                            <div className="font-extrabold text-xs sm:text-sm truncate text-white">{timeA || "A Definir"}</div>
+                        </div>
+
+                        {/* Inputs de placar holográficos */}
+                        <div className="flex items-center gap-1.5 shrink-0 px-2.5 py-1 bg-slate-950/40 rounded-2xl border border-white/5 shadow-inner">
+                            <input
+                                type="number"
+                                min="0"
+                                placeholder="-"
+                                value={palpite.palpite_a !== null ? palpite.palpite_a : ""}
+                                onChange={(e) => handlePlacarChange(jogo.id, 'a', e.target.value)}
+                                onBlur={() => handlePlacarBlur(jogo.id)}
+                                disabled={isJogoBloqueado(jogo)}
+                                className="w-10 h-10 rounded-xl bg-slate-900 text-center text-lg font-black text-white outline-none border border-white/5 focus:border-emerald-500 disabled:opacity-50"
+                            />
+                            <span className="text-slate-600 font-black text-xs">×</span>
+                            <input
+                                type="number"
+                                min="0"
+                                placeholder="-"
+                                value={palpite.palpite_b !== null ? palpite.palpite_b : ""}
+                                onChange={(e) => handlePlacarChange(jogo.id, 'b', e.target.value)}
+                                onBlur={() => handlePlacarBlur(jogo.id)}
+                                disabled={isJogoBloqueado(jogo)}
+                                className="w-10 h-10 rounded-xl bg-slate-900 text-center text-lg font-black text-white outline-none border border-white/5 focus:border-emerald-500 disabled:opacity-50"
+                            />
+                        </div>
+
+                        {/* Time B */}
+                        <div className="flex-1 text-center space-y-2.5 min-w-0">
+                            <div className="font-extrabold text-xs sm:text-sm truncate text-white">{timeB || "A Definir"}</div>
+                        </div>
                     </div>
 
-                    {/* Time B */}
-                    <div className="flex-1 text-center space-y-2.5 min-w-0">
-                        <div className="font-extrabold text-xs sm:text-sm truncate text-white">{timeB || "A Definir"}</div>
-                        {isEmpate && !bracketSalvo && (
-                            <button
-                                onClick={() => handleSelectClassificado(jogo.id, timeB || "")}
-                                className={`text-[9px] px-2.5 py-1 rounded-xl font-black uppercase transition-all shadow-sm ${
-                                    palpite.time_classificado_palpite === timeB
-                                        ? "bg-emerald-500 text-slate-950 font-black shadow-[0_0_10px_rgba(16,185,129,0.3)]"
-                                        : "bg-white/5 text-slate-400 border border-white/5 hover:bg-white/10"
-                                }`}
-                            >
-                                Avança
-                            </button>
-                        )}
-                        {isEmpate && bracketSalvo && palpite.time_classificado_palpite === timeB && (
-                            <span className="text-[9px] bg-emerald-500/20 text-emerald-400 px-2.5 py-1 rounded-xl border border-emerald-500/10 font-black uppercase">
-                                Avança
-                            </span>
-                        )}
-                    </div>
+                    {/* Botões Avança em caso de Empate */}
+                    {isEmpate && (
+                        <div className="flex items-center justify-between gap-2 mt-4 pt-3 border-t border-white/5">
+                            {!isJogoBloqueado(jogo) ? (
+                                <button 
+                                    type="button"
+                                    onClick={() => handleSelectClassificado(jogo.id, timeA || "", 'a')} 
+                                    className={`flex-1 text-[10px] py-1.5 rounded-xl font-bold uppercase transition-all shadow-sm ${
+                                        palpite.lado_classificado === 'a' 
+                                            ? "bg-[#008237] text-white font-black shadow-[0_0_10px_rgba(0,130,55,0.3)]" 
+                                            : "bg-[#2a3644] text-gray-400 hover:text-white"
+                                    }`}
+                                >
+                                    Avança
+                                </button>
+                            ) : (
+                                palpite.lado_classificado === 'a' && (
+                                    <span className="flex-1 text-[10px] bg-[#008237]/20 text-[#008237] py-1.5 rounded-xl font-bold uppercase text-center border border-[#008237]/50">Avança</span>
+                                )
+                            )}
+
+                            {!isJogoBloqueado(jogo) && palpite.lado_classificado && (
+                                <button 
+                                    type="button"
+                                    onClick={() => handleLimparClassificado(jogo.id)} 
+                                    title="Resetar escolha de avanço"
+                                    className="flex items-center justify-center w-8 h-8 rounded-full bg-red-500/20 hover:bg-red-500/30 text-red-400 border border-red-500/10 transition-all active:scale-90 flex-shrink-0"
+                                >
+                                    <span className="material-symbols-outlined text-[16px]">restart_alt</span>
+                                </button>
+                            )}
+
+                            {!isJogoBloqueado(jogo) && !palpite.lado_classificado && (
+                                <div className="w-8 h-8 flex items-center justify-center text-gray-600 flex-shrink-0">
+                                    <span className="material-symbols-outlined text-[16px] opacity-20">help</span>
+                                </div>
+                            )}
+
+                            {!isJogoBloqueado(jogo) ? (
+                                <button 
+                                    type="button"
+                                    onClick={() => handleSelectClassificado(jogo.id, timeB || "", 'b')} 
+                                    className={`flex-1 text-[10px] py-1.5 rounded-xl font-bold uppercase transition-all shadow-sm ${
+                                        palpite.lado_classificado === 'b' 
+                                            ? "bg-[#008237] text-white font-black shadow-[0_0_10px_rgba(0,130,55,0.3)]" 
+                                            : "bg-[#2a3644] text-gray-400 hover:text-white"
+                                    }`}
+                                >
+                                    Avança
+                                </button>
+                            ) : (
+                                palpite.lado_classificado === 'b' && (
+                                    <span className="flex-1 text-[10px] bg-[#008237]/20 text-[#008237] py-1.5 rounded-xl font-bold uppercase text-center border border-[#008237]/50">Avança</span>
+                                )
+                            )}
+                        </div>
+                    )}
                 </div>
             </article>
         );
@@ -349,6 +491,30 @@ function MataMata() {
             default: return jogos16;
         }
     };
+
+    if (!liberado) {
+        return (
+            <div className="space-y-7 px-4 md:px-[100px] pb-28 text-white">
+                <header className="bg-white/3 p-5 rounded-3xl border border-white/5 backdrop-blur-md">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-emerald-400">
+                        Chaveamento do Bolão
+                    </p>
+                    <h1 className="mt-1 text-2xl font-black tracking-tight">Mata-Mata</h1>
+                </header>
+
+                <div className="rounded-[32px] bg-slate-900/60 border border-white/5 p-8 text-center shadow-2xl relative overflow-hidden backdrop-blur-md max-w-xl mx-auto mt-10">
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/5 rounded-full blur-3xl -mr-10 -mt-10 pointer-events-none"></div>
+                    <div className="h-16 w-16 mx-auto bg-amber-500/10 border border-amber-500/30 rounded-2xl flex items-center justify-center text-amber-500 shadow-[0_0_15px_rgba(245,158,11,0.1)] mb-5">
+                        <span className="material-symbols-outlined text-[32px]">lock</span>
+                    </div>
+                    <h2 className="text-lg font-black tracking-tight text-white uppercase">Mata-Mata Bloqueado</h2>
+                    <p className="mt-3 text-xs text-slate-400 leading-relaxed max-w-sm mx-auto">
+                        O chaveamento do Mata-Mata só será liberado para palpites após o término oficial de todos os jogos da Fase de Grupos.
+                    </p>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-7 px-4 md:px-[100px] pb-28 text-white">
@@ -367,9 +533,7 @@ function MataMata() {
                     )}
                 </div>
                 <p className="text-xs text-slate-400 mt-2 leading-relaxed">
-                    {bracketSalvo 
-                        ? "Suas seleções de times classificados foram salvas e consolidadas. Você pode continuar atualizando apenas os placares individuais nas respectivas chaves até 1h antes do jogo." 
-                        : "Monte o seu chaveamento de forma reativa: selecione o placar e o time classificado na fase anterior para que ele avance automaticamente na árvore!"}
+                    Monte o seu chaveamento de forma reativa: selecione o placar e o time classificado na fase anterior para que ele avance automaticamente na árvore!
                 </p>
             </header>
 
@@ -400,22 +564,6 @@ function MataMata() {
             <section className="space-y-4">
                 {getTabJogos().map(renderJogoCard)}
             </section>
-
-            {/* Alerta de Envio Fixo Elegante */}
-            {!bracketSalvo && (
-                <div className="fixed bottom-20 left-1/2 -translate-x-1/2 w-full max-w-md p-4 bg-slate-950/90 backdrop-blur-lg border-t border-white/10 flex justify-between items-center gap-4 shadow-2xl z-50">
-                    <div className="text-[10px] text-slate-400 font-extrabold uppercase tracking-wider leading-relaxed max-w-[180px]">
-                        Preencha todas as abas até a final para poder enviar.
-                    </div>
-                    <button
-                        onClick={handleSave}
-                        disabled={mutation.isPending}
-                        className="bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-xs px-5 py-3.5 rounded-2xl transition-all shadow-[0_0_20px_rgba(16,185,129,0.3)] active:scale-95 disabled:opacity-50 shrink-0"
-                    >
-                        {mutation.isPending ? "Salvando..." : "Salvar Chaveamento"}
-                    </button>
-                </div>
-            )}
         </div>
     );
 }

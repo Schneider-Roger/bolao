@@ -27,7 +27,7 @@ function Regras() {
 
     return (
         <main className="flex-grow w-full max-w-container-max mx-auto py-6 flex flex-col lg:flex-row gap-8 px-4 md:px-[100px] text-white pb-24">
-            
+
             {/* Sidebar de Navegação Rápida (Desktop) */}
             <aside className="hidden lg:block w-64 shrink-0">
                 <div className="sticky top-24 bg-[#0b1727] border border-white/5 rounded-3xl p-5 shadow-xl flex flex-col gap-4">
@@ -50,7 +50,7 @@ function Regras() {
 
             {/* Conteúdo Principal do Regulamento */}
             <section className="flex-grow flex flex-col gap-6">
-                
+
                 {/* Header Card */}
                 <div className="bg-gradient-to-r from-emerald-950 to-[#0b1727] border border-emerald-500/20 rounded-3xl p-6 md:p-8 shadow-xl text-center md:text-left relative overflow-hidden">
                     <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
@@ -72,7 +72,7 @@ function Regras() {
                         <h2 className="text-lg font-black text-white">1. O que é o Bolão Copercana?</h2>
                     </div>
                     <p className="text-gray-300 text-sm leading-relaxed">
-                        É uma ação realizada pela <strong>Copercana</strong>, através do departamento de <strong>Cultura & Marca</strong>, para celebrar a Copa do Mundo de 2026 com todos os colaboradores. A ação acontece de <strong>1º de junho a 30 de julho de 2026</strong>.
+                        É uma ação realizada pela <strong>Copercana</strong>, através do departamento de <strong>Cultura & Marca</strong>, para celebrar a Copa do Mundo de 2026 com todos os colaboradores. A ação acontece de <strong>1º de junho a 20 de julho de 2026</strong>.
                     </p>
                 </article>
 
@@ -94,7 +94,7 @@ function Regras() {
                         <h2 className="text-lg font-black text-white">3. Como funciona?</h2>
                     </div>
                     <p className="text-gray-300 text-sm leading-relaxed">
-                        A plataforma do Bolão da Copa estará disponível durante todo o período da Copa pelo endereço deste próprio site. O acesso é feito de forma simples com o seu <strong>código de funcionário</strong> e senha (<strong>data de nascimento</strong>).
+                        A plataforma do Bolão da Copa estará disponível durante todo o período da Copa pelo endereço <a href="https://bolaocopercana.framer.ai" className="text-emerald-400 underline">bolaocopercana.framer.ai</a>. O acesso é feito de forma simples com o seu <strong>código de funcionário</strong> e <strong>senha</strong> (no primeiro acesso é a <strong>data de nascimento</strong>).
                     </p>
                     <p className="text-gray-300 text-sm leading-relaxed">
                         O colaborador poderá registrar seus palpites para os jogos, acompanhar os resultados em tempo real e verificar sua posição no ranking atualizado.
@@ -113,7 +113,7 @@ function Regras() {
                         <span className="material-symbols-outlined text-emerald-400">sports_soccer</span>
                         <h2 className="text-lg font-black text-white">4. Os palpites</h2>
                     </div>
-                    
+
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
                             <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 text-emerald-400">
@@ -123,13 +123,13 @@ function Regras() {
                                 Os palpites podem ser feitos ou editados até <strong>1 hora antes</strong> do início de cada jogo. Após esse prazo, o palpite fica bloqueado automaticamente e não pode mais ser alterado.
                             </p>
                         </div>
-                        
+
                         <div className="bg-white/5 rounded-2xl p-4 border border-white/5">
                             <h4 className="text-white font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 text-yellow-400">
                                 <span className="material-symbols-outlined text-sm">warning</span> 4.2 Sem Palpite
                             </h4>
                             <p className="text-gray-300 text-xs leading-relaxed mt-2">
-                                Caso o colaborador não registre o palpite no prazo, o jogo simplesmente <strong>não pontua (0 pontos)</strong>. Não há penalidades ou perda de pontos, apenas a perda da oportunidade.
+                                Caso o colaborador não registre o palpite no prazo, o jogo simplesmente <strong>não pontua (0 pontos)</strong>.
                             </p>
                         </div>
 
@@ -200,7 +200,7 @@ function Regras() {
                             <li><strong>Acertou o time que avança, mas errou o adversário ou o placar:</strong> 2 pontos</li>
                             <li><strong>Errou o time que avança:</strong> 0 pontos</li>
                         </ul>
-                        
+
                         <div className="bg-[#132030] p-4 rounded-2xl border border-white/5 flex flex-col gap-2 mt-2">
                             <p className="text-yellow-400 text-xs font-bold uppercase tracking-wider">Atenção ao Placar Exato!</p>
                             <p className="text-gray-300 text-xs leading-relaxed">
@@ -266,7 +266,7 @@ function Regras() {
                         </div>
                         <div className="flex items-center gap-3 bg-[#132030] p-3 rounded-xl border border-white/5">
                             <span className="w-6 h-6 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center font-black">6</span>
-                            <span className="text-gray-200">Par ou ímpar (melhor de três)</span>
+                            <span className="text-gray-200">Sorteio (a ser definido pela organização)</span>
                         </div>
                     </div>
                 </article>
